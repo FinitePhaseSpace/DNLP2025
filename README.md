@@ -18,3 +18,7 @@ PyCharm Venv:
 Adding the newly generated Poetry venv in PyCharm: https://www.jetbrains.com/help/pycharm/poetry.html#existing-poetry-environment
 ```
 
+## Running Tests
+```
+poetry run pytest tests
+```
