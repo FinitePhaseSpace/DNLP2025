@@ -6,6 +6,7 @@ import torch.nn as nn
 import random
 import os
 
+
 class TokenBatchSampler(Sampler[list[int]]):
     """
     Creates batches of indices where each batch aims to not exceed specified
@@ -13,12 +14,15 @@ class TokenBatchSampler(Sampler[list[int]]):
 
     It first sorts examples by length to minimize padding.
     """
-    def __init__(self,
-                 dataset, # Hugging Face dataset with 'source_lengths' and 'target_lengths' columns
-                 max_src_tokens_per_batch: int,
-                 max_tgt_tokens_per_batch: int,
-                 shuffle_batches: bool = True,
-                 drop_last: bool = False):
+
+    def __init__(
+        self,
+        dataset,  # Hugging Face dataset with 'source_lengths' and 'target_lengths' columns
+        max_src_tokens_per_batch: int,
+        max_tgt_tokens_per_batch: int,
+        shuffle_batches: bool = True,
+        drop_last: bool = False,
+    ):
         super().__init__(dataset)
         self.dataset = dataset
         self.max_src_tokens_per_batch = max_src_tokens_per_batch
@@ -30,15 +34,19 @@ class TokenBatchSampler(Sampler[list[int]]):
         # This might load all lengths into memory. Might be problematic for the french dataset.
         self.lengths_and_indices = []
         for i in range(len(dataset)):
-            src_len = dataset[i]["source_length"].item() # Assuming lengths are scalar tensors
+            src_len = dataset[i][
+                "source_length"
+            ].item()  # Assuming lengths are scalar tensors
             tgt_len = dataset[i]["target_length"].item()
-            
-            if src_len == 0 or tgt_len == 0: # Skip empty sequences if any
+
+            if src_len == 0 or tgt_len == 0:  # Skip empty sequences if any
                 continue
-            self.lengths_and_indices.append({'id': i, 'source_length': src_len, 'target_length': tgt_len})
+            self.lengths_and_indices.append(
+                {"id": i, "source_length": src_len, "target_length": tgt_len}
+            )
 
         # Sort by the specified key (e.g., source length)
-        self.lengths_and_indices.sort(key=lambda x: x['source_length'])
+        self.lengths_and_indices.sort(key=lambda x: x["source_length"])
         self.batches = self._create_batches()
 
     def _create_batches(self) -> list[list[int]]:
@@ -48,9 +56,9 @@ class TokenBatchSampler(Sampler[list[int]]):
         current_batch_tgt_tokens = 0
 
         for item_info in self.lengths_and_indices:
-            idx = item_info['id']
-            src_len = item_info['source_length']
-            tgt_len = item_info['target_length']
+            idx = item_info["id"]
+            src_len = item_info["source_length"]
+            tgt_len = item_info["target_length"]
 
             # Check if this sentence can be added to the current batch
             can_add = True
@@ -58,35 +66,37 @@ class TokenBatchSampler(Sampler[list[int]]):
                 can_add = False
             if current_batch_tgt_tokens + tgt_len > self.max_tgt_tokens_per_batch:
                 can_add = False
-            
+
             # If adding this sentence exceeds limits, finalize current batch and start a new one
             if not can_add and len(current_batch_indices) > 0:
                 batches.append(current_batch_indices)
                 current_batch_indices = []
                 current_batch_src_tokens = 0
                 current_batch_tgt_tokens = 0
-            
+
             # Add to (potentially new) current batch, ensuring even single large sentences form a batch
             current_batch_indices.append(idx)
             current_batch_src_tokens += src_len
             current_batch_tgt_tokens += tgt_len
-            
+
             # Eagerly finalize if limits are met after adding the current sentence
             # This handles the case where the very first sentence in a new batch might already be large
-            if current_batch_src_tokens >= self.max_src_tokens_per_batch or \
-               current_batch_tgt_tokens >= self.max_tgt_tokens_per_batch:
+            if (
+                current_batch_src_tokens >= self.max_src_tokens_per_batch
+                or current_batch_tgt_tokens >= self.max_tgt_tokens_per_batch
+            ):
                 batches.append(current_batch_indices)
                 current_batch_indices = []
                 current_batch_src_tokens = 0
                 current_batch_tgt_tokens = 0
 
-
         # Add the last batch if it has any items and drop_last is False
         if len(current_batch_indices) > 0:
-            if not self.drop_last or \
-               (current_batch_src_tokens > 0 and current_batch_tgt_tokens > 0) : # Ensure we don't add empty batches
+            if not self.drop_last or (
+                current_batch_src_tokens > 0 and current_batch_tgt_tokens > 0
+            ):  # Ensure we don't add empty batches
                 batches.append(current_batch_indices)
-        
+
         return batches
 
     def __iter__(self):
@@ -103,16 +113,17 @@ class TranslationBatchCollator:
     """
     Collator for the translation dataset. Used to pad sequences and create masks.
     """
+
     def __init__(self, pad_token_id: int):
         self.pad_token_id = pad_token_id
 
     def __call__(self, batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
         # Assumes each item in 'batch' is a dictionary:
         # {'encoder_input_ids': tensor, 'decoder_input_ids': tensor, 'labels': tensor}
-        
-        encoder_input_ids_list = [item['encoder_input_ids'] for item in batch]
-        decoder_input_ids_list = [item['decoder_input_ids'] for item in batch]
-        labels_list = [item['labels'] for item in batch]
+
+        encoder_input_ids_list = [item["encoder_input_ids"] for item in batch]
+        decoder_input_ids_list = [item["decoder_input_ids"] for item in batch]
+        labels_list = [item["labels"] for item in batch]
 
         encoder_input_ids_padded = pad_sequence(
             encoder_input_ids_list, batch_first=True, padding_value=self.pad_token_id
@@ -125,10 +136,10 @@ class TranslationBatchCollator:
         )
 
         # --- MASK CREATION ---
-        src_key_padding_mask = (encoder_input_ids_padded == self.pad_token_id)
-        tgt_key_padding_mask = (decoder_input_ids_padded == self.pad_token_id)
+        src_key_padding_mask = encoder_input_ids_padded == self.pad_token_id
+        tgt_key_padding_mask = decoder_input_ids_padded == self.pad_token_id
         tgt_len = decoder_input_ids_padded.size(1)
-        tgt_mask = nn.Transformer.generate_square_subsequent_mask( # Causal mask
+        tgt_mask = nn.Transformer.generate_square_subsequent_mask(  # Causal mask
             tgt_len, device=decoder_input_ids_padded.device
         )
 
@@ -136,13 +147,22 @@ class TranslationBatchCollator:
             "encoder_input_ids": encoder_input_ids_padded,
             "decoder_input_ids": decoder_input_ids_padded,
             "labels": labels_padded,
-            "source_key_padding_mask": src_key_padding_mask, # For encoder
-            "target_key_padding_mask": tgt_key_padding_mask, # For decoder self-attention
-            "target_mask": tgt_mask,                         # For decoder self-attention (causal)
+            "source_key_padding_mask": src_key_padding_mask,  # For encoder
+            "target_key_padding_mask": tgt_key_padding_mask,  # For decoder self-attention
+            "target_mask": tgt_mask,  # For decoder self-attention (causal)
         }
 
 
-def create_dataloader(dataset_split, dataset_split_name, tokenizer, max_tokens_per_batch=25000, shuffle=True, source_lang='en', target_lang='de', num_workers=0):
+def create_dataloader(
+    dataset_split,
+    dataset_split_name,
+    tokenizer,
+    max_tokens_per_batch=25000,
+    shuffle=True,
+    source_lang="en",
+    target_lang="de",
+    num_workers=0,
+):
     """
     Create a DataLoader for the translation dataset.
 
@@ -155,7 +175,7 @@ def create_dataloader(dataset_split, dataset_split_name, tokenizer, max_tokens_p
         source_lang (str): Source language code. "en" for English, "de" for German, etc.
         target_lang (str): Target language code. "de" for German, "en" for English, etc.
         num_workers (int): Number of worker processes to use for data loading. If greater than zero, then tokenization will
-            also be parallzelized with all available cpu cores.  
+            also be parallzelized with all available cpu cores.
     """
 
     bos_token_id = tokenizer.token_to_id("<s>")
@@ -177,7 +197,7 @@ def create_dataloader(dataset_split, dataset_split_name, tokenizer, max_tokens_p
         decoder_input_ids = [enc.ids[:-1] for enc in target_encodings]
         labels = [enc.ids[1:] for enc in target_encodings]
 
-        # Total number of tokens to be used 
+        # Total number of tokens to be used
         source_lengths = [len(ids) for ids in encoder_input_ids]
         target_lengths = [len(ids) for ids in decoder_input_ids]
 
@@ -186,7 +206,7 @@ def create_dataloader(dataset_split, dataset_split_name, tokenizer, max_tokens_p
             "decoder_input_ids": decoder_input_ids,
             "labels": labels,
             "source_length": source_lengths,
-            "target_length": target_lengths
+            "target_length": target_lengths,
         }
 
     num_proc = os.cpu_count() if num_workers > 0 else 1
@@ -195,12 +215,18 @@ def create_dataloader(dataset_split, dataset_split_name, tokenizer, max_tokens_p
         batched=True,
         remove_columns=dataset_split.column_names,
         num_proc=num_proc,
-        desc="Tokenizing dataset"
+        desc="Tokenizing dataset",
     )
 
     tokenized_dataset.set_format(
         type="torch",
-        columns=["encoder_input_ids", "decoder_input_ids", "labels", "source_length", "target_length"]
+        columns=[
+            "encoder_input_ids",
+            "decoder_input_ids",
+            "labels",
+            "source_length",
+            "target_length",
+        ],
     )
 
     token_batch_sampler = TokenBatchSampler(
@@ -208,7 +234,7 @@ def create_dataloader(dataset_split, dataset_split_name, tokenizer, max_tokens_p
         max_src_tokens_per_batch=max_tokens_per_batch,
         max_tgt_tokens_per_batch=max_tokens_per_batch,
         shuffle_batches=shuffle,
-        drop_last=(dataset_split_name == "train")  # Drop last incomplete batch
+        drop_last=(dataset_split_name == "train"),  # Drop last incomplete batch
     )
 
     collator = TranslationBatchCollator(pad_token_id=pad_token_id)
@@ -217,7 +243,7 @@ def create_dataloader(dataset_split, dataset_split_name, tokenizer, max_tokens_p
         tokenized_dataset,
         batch_sampler=token_batch_sampler,
         collate_fn=collator,
-        num_workers=num_workers
+        num_workers=num_workers,
     )
 
     return data_loader

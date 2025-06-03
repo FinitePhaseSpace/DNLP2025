@@ -7,13 +7,18 @@ from tokenizers.pre_tokenizers import Whitespace
 
 import os
 
-def train_tokenizer(download_func, tokenizer_save_path, source_lang, target_lang, vocab_size):
+
+def train_tokenizer(
+    download_func, tokenizer_save_path, source_lang, target_lang, vocab_size
+):
     dataset = download_func()
 
     tokenizer = Tokenizer(BPE())
     tokenizer.pre_tokenizer = Whitespace()
 
-    total_length = (len(dataset["train"]) + len(dataset["validation"]) + len(dataset["test"])) * 2
+    total_length = (
+        len(dataset["train"]) + len(dataset["validation"]) + len(dataset["test"])
+    ) * 2
 
     def iterator():
         for split in ["train", "validation", "test"]:
@@ -43,7 +48,9 @@ def main():
     os.makedirs("tokenizers", exist_ok=True)
 
     print("Training de-en tokenizer...")
-    de_en_tokenizer = train_tokenizer(download_wmt14_de_en, "tokenizers/de_en_tokenizer.json", "de", "en", 37000)
+    de_en_tokenizer = train_tokenizer(
+        download_wmt14_de_en, "tokenizers/de_en_tokenizer.json", "de", "en", 37000
+    )
     print("Finished training de-en tokenizer...")
 
     print("Testing de-en tokenizer...")
@@ -57,6 +64,7 @@ def main():
 
     # print("Testing fr-en tokenizer...")
     # print(fr_en_tokenizer.encode("Bonjour, comment ça va?").tokens)
+
 
 if __name__ == "__main__":
     main()

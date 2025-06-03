@@ -1,6 +1,7 @@
 import torch
 import math
 
+
 def positional_encoding(max_len, d_model):
     """
     Generate positional encoding for a given maximum length and model dimension.
