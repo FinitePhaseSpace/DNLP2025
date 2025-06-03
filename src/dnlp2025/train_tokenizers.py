@@ -7,7 +7,7 @@ from tokenizers.pre_tokenizers import Whitespace
 
 import os
 
-def train_tokenizer(download_func, tokenizer_save_path, source_lang, target_lang):
+def train_tokenizer(download_func, tokenizer_save_path, source_lang, target_lang, vocab_size):
     dataset = download_func()
 
     tokenizer = Tokenizer(BPE())
@@ -21,7 +21,7 @@ def train_tokenizer(download_func, tokenizer_save_path, source_lang, target_lang
                 yield example["translation"][source_lang]
                 yield example["translation"][target_lang]
 
-    trainer = BpeTrainer(special_tokens=["<pad>", "<s>", "</s>"])
+    trainer = BpeTrainer(special_tokens=["<pad>", "<s>", "</s>"], vocab_size=vocab_size)
 
     tokenizer.train_from_iterator(iterator(), trainer=trainer, length=total_length)
 
@@ -43,15 +43,18 @@ def main():
     os.makedirs("tokenizers", exist_ok=True)
 
     print("Training de-en tokenizer...")
-    de_en_tokenizer = train_tokenizer(download_wmt14_de_en, "tokenizers/de_en_tokenizer.json", "de", "en")
+    de_en_tokenizer = train_tokenizer(download_wmt14_de_en, "tokenizers/de_en_tokenizer.json", "de", "en", 37000)
     print("Finished training de-en tokenizer...")
-
-    # print("Training fr-en tokenizer...")
-    # fr_en_tokenizer = train_tokenizer(download_wmt14_fr_en, "tokenizers/fr_en_tokenizer.json", "fr", "en")
-    # print("Finished training fr-en tokenizer...")
 
     print("Testing de-en tokenizer...")
     print(de_en_tokenizer.encode("Guten tag. Wilkommen. Wie geht es Ihnen?").tokens)
+
+    # Disabled french dataset for now, it's huge, which makes it hard to experiment with it locally
+
+    # print("Training fr-en tokenizer...")
+    # fr_en_tokenizer = train_tokenizer(download_wmt14_fr_en, "tokenizers/fr_en_tokenizer.json", "fr", "en", 32000)
+    # print("Finished training fr-en tokenizer...")
+
     # print("Testing fr-en tokenizer...")
     # print(fr_en_tokenizer.encode("Bonjour, comment ça va?").tokens)
 
