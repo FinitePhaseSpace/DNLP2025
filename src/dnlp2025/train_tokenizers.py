@@ -54,7 +54,7 @@ def main():
     print("Finished training de-en tokenizer...")
 
     print("Testing de-en tokenizer...")
-    print(de_en_tokenizer.encode("Guten tag. Wilkommen. Wie geht es Ihnen?").tokens)
+    print(de_en_tokenizer.encode("Guten tag. Willkommen. Wie geht es Ihnen?").tokens)
 
     # Disabled french dataset for now, it's huge, which makes it hard to experiment with it locally
 
