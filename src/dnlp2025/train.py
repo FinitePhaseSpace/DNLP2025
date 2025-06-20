@@ -1,11 +1,54 @@
+import os
 import torch
 from torch import nn, optim
-from src.dnlp2025.model import AIAYNModel
-from src.dnlp2025.dataset import create_dataloader
-from src.dnlp2025.download_datasets import download_wmt14_de_en
+
+# from src.dnlp2025.model import AIAYNModel
+# from src.dnlp2025.dataset import create_dataloader
+# from src.dnlp2025.download_datasets import download_wmt14_de_en
+from model import AIAYNModel
+from dataset import create_dataloader
+from download_datasets import download_wmt14_de_en
 from tokenizers import Tokenizer
-from src.dnlp2025.check import get_device
-import os
+from check import get_device
+
+
+class TrainState:
+    """Track steps, examples, and tokens processed"""
+
+    def __init__(self):
+        self.epoch = 0
+        self.step = 0
+        self.accum_step = 0
+        self.samples = 0
+        self.tokens = 0
+
+    def to_dict(self):
+        return self.__dict__
+
+    def load_state(self, state_dict):
+        self.__dict__.update(state_dict)
+
+
+def save_checkpoint(model, optimizer, train_state, path):
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "train_state": train_state.to_dict(),
+        },
+        path,
+    )
+
+
+def load_checkpoint(model, optimizer, train_state, path):
+    if os.path.exists(path):
+        print(f"Loading checkpoint from {path}")
+        checkpoint = torch.load(path)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        train_state.load_state(checkpoint["train_state"])
+        return True
+    return False
 
 
 def train():
@@ -14,11 +57,13 @@ def train():
     epochs = 10
     max_tokens_per_batch = 20000
     learning_rate = 3e-4
-    save_path = "checkpoints/aiayn.pt"
+    checkpoint_path = "checkpoints/aiayn.pt"
     os.makedirs("checkpoints", exist_ok=True)
 
     # --- Tokenizer ---
     tokenizer = Tokenizer.from_file("tokenizers/de_en_tokenizer.json")
+    vocab_size = len(tokenizer.get_vocab())
+    pad_token_id = tokenizer.token_to_id("<pad>")
 
     # --- Data ---
     dataset = download_wmt14_de_en()
@@ -49,44 +94,64 @@ def train():
         device
     )
 
-    vocab_size = len(tokenizer.get_vocab())
-    pad_token_id = tokenizer.token_to_id("<pad>")
     output_projection = nn.Linear(512, vocab_size).to(device)
 
-    # --- Training Setup ---
+    # --- Optimizer & Loss ---
     optimizer = optim.Adam(
         model.parameters(), lr=learning_rate, betas=(0.9, 0.98), eps=1e-9
     )
     criterion = nn.CrossEntropyLoss(ignore_index=pad_token_id)
 
+    # --- Train State ---
+    train_state = TrainState()
+
+    # --- Resume if possible ---
+    load_checkpoint(model, optimizer, train_state, checkpoint_path)
+
     # --- Training Loop ---
-    for epoch in range(epochs):
+    for epoch in range(train_state.epoch, epochs):
+        print(f"\nEpoch {epoch + 1}")
+        train_state.epoch = epoch
         model.train()
         total_loss = 0
-        for batch in train_loader:
+
+        for i, batch in enumerate(train_loader):
             for key in batch:
                 batch[key] = batch[key].to(device)
 
-            # Forward pass
             encoder_input = batch["encoder_input_ids"]
             decoder_input = batch["decoder_input_ids"]
             labels = batch["labels"]
 
-            encoder_out = encoder_input
-            decoder_out = decoder_input
+            # Forward
+            output = model(encoder_input, decoder_input)
+            logits = output_projection(output)  # [B, T, vocab_size]
 
-            transformer_out = model(encoder_out, decoder_out)  # shape: [B, T, D]
-            logits = output_projection(transformer_out)  # shape: [B, T, vocab_size]
-
+            # Compute loss
             loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
-            optimizer.zero_grad()
             loss.backward()
+
             optimizer.step()
+            optimizer.zero_grad()
+
+            # Update train state
+            train_state.step += 1
+            train_state.samples += encoder_input.size(0)
+            train_state.tokens += encoder_input.numel()
 
             total_loss += loss.item()
 
-        print(f"Epoch {epoch + 1} | Train Loss: {total_loss / len(train_loader):.4f}")
-        torch.save(model.state_dict(), save_path)
+            if i % 50 == 0:
+                print(
+                    f"[Step {i}] Loss: {loss.item():.4f} | "
+                    f"Tokens: {train_state.tokens} | Samples: {train_state.samples}"
+                )
+
+        avg_loss = total_loss / len(train_loader)
+        print(f"End of Epoch {epoch + 1} | Avg Loss: {avg_loss:.4f}")
+
+        # Save checkpoint
+        save_checkpoint(model, optimizer, train_state, checkpoint_path)
 
 
 if __name__ == "__main__":
