@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from decoder_layer import DecoderLayer
-from encoder_layer import EncoderLayer
+from src.dnlp2025.decoder_layer import DecoderLayer
+from src.dnlp2025.encoder_layer import EncoderLayer
 
 class EncoderDecoder(nn.Module):
     def __init__(

@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.nn.functional import log_softmax
 from torch.types import FileLike
 
-from encoder_decoder import EncoderDecoder
+from src.dnlp2025.encoder_decoder import EncoderDecoder
 
 
 # TODO share wight matrix between embeddings and linear out?!

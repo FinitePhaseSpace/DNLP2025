@@ -32,3 +32,14 @@ poetry run train-tokenizers
 ```
 poetry run pytest tests
 ```
+
+## Train Tokenizers
+```
+poetry run train-tekenizers
+```
+
+
+## Training
+```
+poetry run train-model
+```

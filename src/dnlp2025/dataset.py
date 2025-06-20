@@ -33,6 +33,7 @@ class TokenBatchSampler(Sampler[list[int]]):
         # Get lengths and original indices
         # This might load all lengths into memory. Might be problematic for the french dataset.
         self.lengths_and_indices = []
+        print(f"TokenBatchSampler get lengths and indices (dataset size: {len(dataset)})")
         for i in range(len(dataset)):
             src_len = dataset[i][
                 "source_length"
@@ -45,9 +46,18 @@ class TokenBatchSampler(Sampler[list[int]]):
                 {"id": i, "source_length": src_len, "target_length": tgt_len}
             )
 
+            progress = i / len(dataset)
+            if (i % (len(dataset) / 100)) == 0:
+                print(f"{progress:.1f}%")
+
+        print(f"Done computing len_ind")
+
         # Sort by the specified key (e.g., source length)
+        print(f"Sorting")
         self.lengths_and_indices.sort(key=lambda x: x["source_length"])
+        print(f"Creating Batches")
         self.batches = self._create_batches()
+        print(f"Batches created")
 
     def _create_batches(self) -> list[list[int]]:
         batches = []
@@ -210,6 +220,7 @@ def create_dataloader(
         }
 
     num_proc = os.cpu_count() if num_workers > 0 else 1
+    print(f"dataset.py: Create tokenized Dataset")
     tokenized_dataset = dataset_split.map(
         preprocess_fn,
         batched=True,
@@ -217,6 +228,7 @@ def create_dataloader(
         num_proc=num_proc,
         desc="Tokenizing dataset",
     )
+    print(f"dataset.py: Tokenization Done")
 
     tokenized_dataset.set_format(
         type="torch",
@@ -239,11 +251,16 @@ def create_dataloader(
 
     collator = TranslationBatchCollator(pad_token_id=pad_token_id)
 
+    print(f"Creating DataLoader using Batch TokenBatchSampler and TranslationBatchCollator")
     data_loader = DataLoader(
         tokenized_dataset,
         batch_sampler=token_batch_sampler,
         collate_fn=collator,
         num_workers=num_workers,
     )
+    print(f"Done")
 
+    data_loader_path = "dataloader/" + source_lang + "_" + target_lang + ".pth"
+    print(f"Saving DataLoader: {data_loader_path}")
+    torch.save(data_loader, data_loader_path)
     return data_loader

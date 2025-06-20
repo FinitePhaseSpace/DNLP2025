@@ -5,11 +5,11 @@ from torch import nn, optim
 # from src.dnlp2025.model import AIAYNModel
 # from src.dnlp2025.dataset import create_dataloader
 # from src.dnlp2025.download_datasets import download_wmt14_de_en
-from model import AIAYNModel
-from dataset import create_dataloader
-from download_datasets import download_wmt14_de_en
+from src.dnlp2025.model import AIAYNModel
+from src.dnlp2025.dataset import create_dataloader
+from src.dnlp2025.download_datasets import download_wmt14_de_en
 from tokenizers import Tokenizer
-from check import get_device
+from src.dnlp2025.check import get_device
 
 
 class TrainState:
@@ -41,6 +41,7 @@ def save_checkpoint(model, optimizer, train_state, path):
 
 
 def load_checkpoint(model, optimizer, train_state, path):
+    print(f"Trying to load checkpoint from {path}")
     if os.path.exists(path):
         print(f"Loading checkpoint from {path}")
         checkpoint = torch.load(path)
@@ -60,34 +61,47 @@ def train():
     checkpoint_path = "checkpoints/aiayn.pt"
     os.makedirs("checkpoints", exist_ok=True)
 
-    # --- Tokenizer ---
-    tokenizer = Tokenizer.from_file("tokenizers/de_en_tokenizer.json")
-    vocab_size = len(tokenizer.get_vocab())
-    pad_token_id = tokenizer.token_to_id("<pad>")
+    dataloder_path = ""
+    train_loader = None
+    if os.path.isfile("dataloader/de_en.pth"):
+        print("\n>>>>>     Loading Dataloader from File!!!     <<<<<<\n")
+        train_loader = torch.load("dataloader/de_en.pth")
+    else:
+        # --- Tokenizer ---
+        print(f"Loading Tokenizer")
+        tokenizer = Tokenizer.from_file("tokenizers/de_en_tokenizer.json")
+        vocab_size = len(tokenizer.get_vocab())
+        pad_token_id = tokenizer.token_to_id("<pad>")
 
-    # --- Data ---
-    dataset = download_wmt14_de_en()
-    train_loader = create_dataloader(
-        dataset_split=dataset["train"],
-        dataset_split_name="train",
-        tokenizer=tokenizer,
-        max_tokens_per_batch=max_tokens_per_batch,
-        shuffle=True,
-        source_lang="de",
-        target_lang="en",
-        num_workers=0,
-    )
+        # --- Data ---
+        #TODO are we splitting correctly? ( i disabled the next block, create_dataloader already names something train internally!
+        print(f"Loading and Tokenizing Dataset: Train")
+        dataset = download_wmt14_de_en()
+        train_loader = create_dataloader(
+            dataset_split=dataset["train"],
+            dataset_split_name="train",
+            tokenizer=tokenizer,
+            max_tokens_per_batch=max_tokens_per_batch,
+            shuffle=True,
+            source_lang="de",
+            target_lang="en",
+            num_workers=0,
+        )
+        print(f"Finished and Tokenizing Dataset: Train")
 
-    val_loader = create_dataloader(
-        dataset_split=dataset["validation"],
-        dataset_split_name="validation",
-        tokenizer=tokenizer,
-        max_tokens_per_batch=max_tokens_per_batch,
-        shuffle=False,
-        source_lang="de",
-        target_lang="en",
-        num_workers=0,
-    )
+
+        #print(f"Loading and Tokenizing Dataset: Validation")
+        #val_loader = create_dataloader(
+        #    dataset_split=dataset["validation"],
+        #    dataset_split_name="validation",
+        #    tokenizer=tokenizer,
+        #    max_tokens_per_batch=max_tokens_per_batch,
+        #    shuffle=False,
+        #    source_lang="de",
+        #    target_lang="en",
+        #    num_workers=0,
+        #)
+        #print(f"Finished and Tokenizing Dataset: Validation")
 
     # --- Model ---
     model = AIAYNModel(layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1).to(
@@ -155,4 +169,5 @@ def train():
 
 
 if __name__ == "__main__":
+    os.chdir("../../") # hack so direct file execution works
     train()
