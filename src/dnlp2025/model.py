@@ -27,8 +27,8 @@ class AIAYNModel(nn.Module):
         in_encoding =self.embedding_in_drop(in_encoding)
 
         in_decoding = self.embedding_out(x)
-        in_decoding = in_encoding + self.pe[:, : x.size(1)].requires_grad_(False)
-        in_decoding =self.embedding_out_drop(in_encoding)
+        in_decoding = in_decoding + self.pe[:, : x.size(1)].requires_grad_(False)
+        in_decoding =self.embedding_out_drop(in_decoding)
 
         x = self.encoder_decoder(in_encoding, in_decoding)
 
