@@ -4,17 +4,17 @@ import torch
 import torch.nn as nn
 from torch.types import FileLike
 
+from dnlp2025.encoder_decoder import EncoderDecoder
 
-#TODO: it might be necessary do define Module subclasses to elegantly define the model (like in Homework 2)
 class AIAYNModel(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1) -> None:
         super(AIAYNModel, self).__init__()
-        #TODO define layers
+        self.encoder_decoder = EncoderDecoder(layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1)
 
-        #TODO remove placeholder linear impl
-        self.linear = nn.Linear(10, 5)
+    def forward(self, in_encoder, in_decoder):
+        # TODO add mask
+        self.encoder_decoder(in_encoder, in_decoder)
 
-    def forward(self, x):
         #TODO define forward pass
         #TODO remove placeholder linear impl
         return self.linear(x)

@@ -2,21 +2,21 @@ import torch
 import torch.nn as nn
 
 class EncoderLayer(nn.Module):
-    def __init__(self, dropout=0.1) -> None:
+    def __init__(self,m_dim=512, ffn_dim=2048, heads=8, dropout=0.1) -> None:
         super(EncoderLayer, self).__init__()
         # The dimensionality of input and output is dmodel = 512, and the inner-layer has dimensionality df_f = 2048
         # FFN(x) = max(0, xW1 + b1)W2 + b2
         #MHA
-        self.key_projection = nn.Linear(512, 512)
-        self.query_projection = nn.Linear(512, 512)
-        self.value_projection = nn.Linear(512, 512)
-        self.mha = nn.MultiheadAttention(embed_dim=512, num_heads=8, dropout=dropout)
-        self.mha_norm = nn.LayerNorm(512)
+        self.key_projection = nn.Linear(m_dim, m_dim)
+        self.query_projection = nn.Linear(m_dim, m_dim)
+        self.value_projection = nn.Linear(m_dim, m_dim)
+        self.mha = nn.MultiheadAttention(embed_dim=m_dim, num_heads=heads, dropout=dropout)
+        self.mha_norm = nn.LayerNorm(m_dim)
         #FFN
-        self.sub2_linear_hidden = nn.Linear(in_features=512, out_features=2048)
+        self.sub2_linear_hidden = nn.Linear(in_features=m_dim, out_features=ffn_dim)
         self.relu = nn.ReLU()
-        self.sub2_linear_output = nn.Linear(in_features=2048, out_features=512)
-        self.sub2_norm = nn.LayerNorm(512)
+        self.sub2_linear_output = nn.Linear(in_features=ffn_dim, out_features=m_dim)
+        self.sub2_norm = nn.LayerNorm(m_dim)
         self.sub2_dropout = nn.Dropout(dropout)
 
     def forward(self, x, mask=None):

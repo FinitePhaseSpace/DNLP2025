@@ -2,25 +2,25 @@ import torch
 import torch.nn as nn
 
 class DecoderLayer(nn.Module):
-    def __init__(self, dropout=0.1) -> None:
+    def __init__(self, layers=6, m_dim=512, ffn_dim=2048, heads=8, dropout=0.1) -> None:
         super(DecoderLayer, self).__init__()
         #MHA1
-        self.mha1_key_projection = nn.Linear(512, 512)
-        self.mha1_query_projection = nn.Linear(512, 512)
-        self.mha1_value_projection = nn.Linear(512, 512)
-        self.mha1 = nn.MultiheadAttention(embed_dim=512, num_heads=8, dropout=dropout)
-        self.mha1_norm = nn.LayerNorm(512)
+        self.mha1_key_projection = nn.Linear(m_dim, m_dim)
+        self.mha1_query_projection = nn.Linear(m_dim, m_dim)
+        self.mha1_value_projection = nn.Linear(m_dim, m_dim)
+        self.mha1 = nn.MultiheadAttention(embed_dim=m_dim, num_heads=heads, dropout=dropout)
+        self.mha1_norm = nn.LayerNorm(m_dim)
         #MHA2
-        self.mha2_key_projection = nn.Linear(512, 512)
-        self.mha2_query_projection = nn.Linear(512, 512)
-        self.mha2_value_projection = nn.Linear(512, 512)
-        self.mha2 = nn.MultiheadAttention(embed_dim=512, num_heads=8, dropout=dropout)
-        self.mha2_norm = nn.LayerNorm(512)
+        self.mha2_key_projection = nn.Linear(m_dim, m_dim)
+        self.mha2_query_projection = nn.Linear(m_dim, m_dim)
+        self.mha2_value_projection = nn.Linear(m_dim, m_dim)
+        self.mha2 = nn.MultiheadAttention(embed_dim=m_dim, num_heads=8, dropout=dropout)
+        self.mha2_norm = nn.LayerNorm(m_dim)
         #FFN
-        self.ffn_hidden = nn.Linear(in_features=512, out_features=2048)
+        self.ffn_hidden = nn.Linear(in_features=m_dim, out_features=ffn_dim)
         self.relu = nn.ReLU()
-        self.ffn_output = nn.Linear(in_features=2048, out_features=512)
-        self.ffn_norm = nn.LayerNorm(512)
+        self.ffn_output = nn.Linear(in_features=ffn_dim, out_features=m_dim)
+        self.ffn_norm = nn.LayerNorm(m_dim)
         self.ffn_dropout = nn.Dropout(dropout)
 
     def forward(self, x, encoder_out, mask=None):
