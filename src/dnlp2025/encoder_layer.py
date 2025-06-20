@@ -27,7 +27,7 @@ class EncoderLayer(nn.Module):
         key = self.key_projection(x)
         query = self.query_projection(x)
         value = self.value_projection(x)
-        multi_head_out = self.mha(query, key, value, attn_mask=mask)
+        multi_head_out, mha_weights = self.mha(query, key, value, attn_mask=mask)
         #add residual + norm
         sublayer1_out = self.mha_norm(multi_head_out + residual)
 

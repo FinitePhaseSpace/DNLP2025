@@ -6,7 +6,8 @@ import torch.nn as nn
 from torch.nn.functional import log_softmax
 from torch.types import FileLike
 
-from dnlp2025.encoder_decoder import EncoderDecoder
+from encoder_decoder import EncoderDecoder
+
 
 # TODO share wight matrix between embeddings and linear out?!
 class AIAYNModel(nn.Module):
@@ -16,6 +17,8 @@ class AIAYNModel(nn.Module):
         self.embedding_in_drop = nn.Dropout(dropout)
         self.embedding_out_drop = nn.Dropout(dropout)
         self.embedding_out = nn.Embedding(vocab_size, dimension)
+        # todo set to 5000, ok?
+        self.pe = positional_encoding(5000, dimension)
         self.encoder_decoder = EncoderDecoder(layers=layers, dimension=dimension, ffn_dim=ffn_dim, heads=heads, dropout=dropout)
         self.linear = nn.Linear(dimension, vocab_size)
 
@@ -64,3 +67,26 @@ def positional_encoding(max_len, d_model):
     pe.unsqueeze_(0)
 
     return pe
+
+
+# Test code
+def test_model():
+    vocab_size = 100
+    seq_len = 10
+    batch_size = 2
+    model = AIAYNModel(vocab_size=vocab_size)
+    model.eval()
+
+    # Generate a random batch of token IDs
+    input_tensor = torch.randint(0, vocab_size, (batch_size, seq_len))
+
+    with torch.no_grad():
+        output = model(input_tensor)
+
+    print(f"Input shape: {input_tensor.shape}")
+    print(f"Output shape: {output.shape}")  # Expected: (batch_size, seq_len, vocab_size)
+    print(f"Sample output (logits):\n{output[0]}")
+
+
+if __name__ == "__main__":
+    test_model()
