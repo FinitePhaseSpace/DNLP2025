@@ -16,7 +16,7 @@ class AIAYNModel(nn.Module):
         self.embedding_in_drop = nn.Dropout(dropout)
         self.embedding_out_drop = nn.Dropout(dropout)
         self.embedding_out = nn.Embedding(vocab_size, dimension)
-        self.encoder_decoder = EncoderDecoder(layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1)
+        self.encoder_decoder = EncoderDecoder(layers=layers, dimension=dimension, ffn_dim=ffn_dim, heads=heads, dropout=dropout)
         self.linear = nn.Linear(dimension, vocab_size)
 
     def forward(self, x):
