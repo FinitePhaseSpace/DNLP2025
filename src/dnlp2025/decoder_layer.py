@@ -8,13 +8,13 @@ class DecoderLayer(nn.Module):
         self.mha1_key_projection = nn.Linear(m_dim, m_dim)
         self.mha1_query_projection = nn.Linear(m_dim, m_dim)
         self.mha1_value_projection = nn.Linear(m_dim, m_dim)
-        self.mha1 = nn.MultiheadAttention(embed_dim=m_dim, num_heads=heads, dropout=dropout)
+        self.mha1 = nn.MultiheadAttention(embed_dim=m_dim, num_heads=heads, dropout=dropout, batch_first=True)
         self.mha1_norm = nn.LayerNorm(m_dim)
         #MHA2
         self.mha2_key_projection = nn.Linear(m_dim, m_dim)
         self.mha2_query_projection = nn.Linear(m_dim, m_dim)
         self.mha2_value_projection = nn.Linear(m_dim, m_dim)
-        self.mha2 = nn.MultiheadAttention(embed_dim=m_dim, num_heads=8, dropout=dropout)
+        self.mha2 = nn.MultiheadAttention(embed_dim=m_dim, num_heads=8, dropout=dropout, batch_first=True)
         self.mha2_norm = nn.LayerNorm(m_dim)
         #FFN
         self.ffn_hidden = nn.Linear(in_features=m_dim, out_features=ffn_dim)
@@ -56,5 +56,5 @@ class DecoderLayer(nn.Module):
         layer2out = self.ffn_output(layer1relu)
         layer2dropout = self.ffn_dropout(layer2out)
         # add residual + norm
-        normed = self.ffn_norm(layer2out + residual)
+        normed = self.ffn_norm(layer2dropout + residual)
         return normed

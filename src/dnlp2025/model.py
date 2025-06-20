@@ -25,15 +25,15 @@ class AIAYNModel(nn.Module):
     def forward(self, x):
         # TODO add mask
         #add dropout!
-        in_encoding = self.embedding_in(x)
-        in_encoding = in_encoding + self.pe[:, : x.size(1)].requires_grad_(False)
-        in_encoding =self.embedding_in_drop(in_encoding)
+        enc_in = self.embedding_in(x)
+        enc_in = enc_in + self.pe[:, : x.size(1)].requires_grad_(False)
+        enc_in =self.embedding_in_drop(enc_in)
 
-        in_decoding = self.embedding_out(x)
-        in_decoding = in_decoding + self.pe[:, : x.size(1)].requires_grad_(False)
-        in_decoding =self.embedding_out_drop(in_decoding)
+        dec_in = self.embedding_out(x)
+        dec_in = dec_in + self.pe[:, : x.size(1)].requires_grad_(False)
+        dec_in =self.embedding_out_drop(dec_in)
 
-        x = self.encoder_decoder(in_encoding, in_decoding)
+        x = self.encoder_decoder(enc_in, dec_in)
 
         return log_softmax(self.linear(x), dim=-1)
 
@@ -71,7 +71,7 @@ def positional_encoding(max_len, d_model):
 
 # Test code
 def test_model():
-    vocab_size = 100
+    vocab_size = 10
     seq_len = 10
     batch_size = 2
     model = AIAYNModel(vocab_size=vocab_size)
@@ -86,6 +86,8 @@ def test_model():
     print(f"Input shape: {input_tensor.shape}")
     print(f"Output shape: {output.shape}")  # Expected: (batch_size, seq_len, vocab_size)
     print(f"Sample output (logits):\n{output[0]}")
+
+    print(f"Predicted token id:{output[0].argmax(dim=-1)}")
 
 
 if __name__ == "__main__":

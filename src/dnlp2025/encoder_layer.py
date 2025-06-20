@@ -10,7 +10,7 @@ class EncoderLayer(nn.Module):
         self.key_projection = nn.Linear(m_dim, m_dim)
         self.query_projection = nn.Linear(m_dim, m_dim)
         self.value_projection = nn.Linear(m_dim, m_dim)
-        self.mha = nn.MultiheadAttention(embed_dim=m_dim, num_heads=heads, dropout=dropout)
+        self.mha = nn.MultiheadAttention(embed_dim=m_dim, num_heads=heads, dropout=dropout, batch_first=True)
         self.mha_norm = nn.LayerNorm(m_dim)
         #FFN
         self.sub2_linear_hidden = nn.Linear(in_features=m_dim, out_features=ffn_dim)
