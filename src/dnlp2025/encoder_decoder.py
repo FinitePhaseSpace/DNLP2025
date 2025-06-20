@@ -21,10 +21,10 @@ class EncoderDecoder(nn.Module):
     def forward(self, in_encoder, in_decoder):
         for encoder in self.encoder:
             #TODO add mask
-            in_encoder = self.encoder(in_encoder)
+            in_encoder = encoder(in_encoder)
 
         for decoder in self.decoder:
             # TODO add mask
-            in_decoder = self.decoder(x=in_decoder, encoder_out=in_encoder)
+            in_decoder = decoder(x=in_decoder, encoder_out=in_encoder)
 
         return in_decoder
