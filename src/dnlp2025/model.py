@@ -70,7 +70,7 @@ def positional_encoding(max_len, d_model):
 
 
 # Test code
-def test_model():
+def try_model():
     vocab_size = 10
     seq_len = 10
     batch_size = 2
@@ -90,5 +90,56 @@ def test_model():
     print(f"Predicted token id:{output[0].argmax(dim=-1)}")
 
 
+def generate_sequence(model, input_seq, max_new_tokens, vocab_size):
+    """
+    Generate sequences token by token.
+
+    Args:
+        model: Your transformer model (expects [batch_size, seq_len] input)
+        input_seq: Tensor of shape [batch_size, seq_len] → initial sequence
+        max_new_tokens: Number of tokens to generate
+        vocab_size: Size of vocabulary (optional, for clarity)
+
+    Returns:
+        Generated sequences → shape [batch_size, seq_len + max_new_tokens]
+    """
+    model.eval()
+
+    # Start with the provided input
+    generated = input_seq.clone()
+
+    for _ in range(max_new_tokens):
+        with torch.no_grad():
+            # Forward pass → get logits
+            output = model(generated)
+
+            # Get logits for the *last* position → shape: [batch_size, vocab_size]
+            next_token_logits = output[:, -1, :]
+
+            # Greedy decoding → pick the most probable token
+            next_token = next_token_logits.argmax(dim=-1, keepdim=True)  # [batch_size, 1]
+
+            # Append the predicted token to the sequence
+            generated = torch.cat([generated, next_token], dim=1)  # [batch_size, seq_len + 1]
+
+    return generated
+
+
+def try_sequence_gen():
+    vocab_size = 10
+    seq_len = 10
+    batch_size = 2
+    model = AIAYNModel(vocab_size=vocab_size)
+    model.eval()
+    # Generate a random batch of token IDs
+    input_tensor = torch.randint(0, vocab_size, (batch_size, seq_len))
+    print(f"input:{input_tensor}")
+    print(f"seq{generate_sequence(model, input_tensor, 5, vocab_size)}")
+
+
 if __name__ == "__main__":
-    test_model()
+    try_model()
+
+    try_sequence_gen()
+
+
