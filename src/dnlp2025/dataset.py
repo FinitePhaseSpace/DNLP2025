@@ -1,3 +1,6 @@
+import time
+from pathlib import Path
+
 import torch
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torch.nn.utils.rnn import pad_sequence
@@ -34,21 +37,22 @@ class TokenBatchSampler(Sampler[list[int]]):
         # This might load all lengths into memory. Might be problematic for the french dataset.
         self.lengths_and_indices = []
         print(f"TokenBatchSampler get lengths and indices (dataset size: {len(dataset)})")
-        for i in range(len(dataset)):
-            src_len = dataset[i][
-                "source_length"
-            ].item()  # Assuming lengths are scalar tensors
-            tgt_len = dataset[i]["target_length"].item()
+        print(f"Extracting source Lengths")
 
-            if src_len == 0 or tgt_len == 0:  # Skip empty sequences if any
-                continue
-            self.lengths_and_indices.append(
-                {"id": i, "source_length": src_len, "target_length": tgt_len}
-            )
+        t0 = time.time()
+        source_lengths = torch.tensor([dataset[i]["source_length"] for i in range(len(dataset))])
 
-            progress = i / len(dataset)
-            if (i % (len(dataset) / 100)) == 0:
-                print(f"{progress:.1f}%")
+        print(f"Extracting target Lengths")
+        target_lengths = torch.tensor([dataset[i]["target_length"] for i in range(len(dataset))])
+
+        mask = (source_lengths != 0) & (target_lengths != 0)
+        print(f"Extracting indices")
+        indices = torch.arange(len(dataset))[mask]
+        print(f"Adding indices and src/tar lengths to map")
+        self.lengths_and_indices = [
+            {"id": int(i), "source_length": int(src), "target_length": int(tgt)}
+            for i, src, tgt in zip(indices, source_lengths[mask], target_lengths[mask])
+        ]
 
         print(f"Done computing len_ind")
 
@@ -58,6 +62,8 @@ class TokenBatchSampler(Sampler[list[int]]):
         print(f"Creating Batches")
         self.batches = self._create_batches()
         print(f"Batches created")
+        t1 = time.time()
+        print(f"TokenBatchSampler took {t1 - t0} seconds")
 
     def _create_batches(self) -> list[list[int]]:
         batches = []
@@ -130,7 +136,7 @@ class TranslationBatchCollator:
     def __call__(self, batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
         # Assumes each item in 'batch' is a dictionary:
         # {'encoder_input_ids': tensor, 'decoder_input_ids': tensor, 'labels': tensor}
-
+        t0 = time.time()
         encoder_input_ids_list = [item["encoder_input_ids"] for item in batch]
         decoder_input_ids_list = [item["decoder_input_ids"] for item in batch]
         labels_list = [item["labels"] for item in batch]
@@ -152,7 +158,8 @@ class TranslationBatchCollator:
         tgt_mask = nn.Transformer.generate_square_subsequent_mask(  # Causal mask
             tgt_len, device=decoder_input_ids_padded.device
         )
-
+        t1 = time.time()
+        print(f"collator time: {t1 - t0} seconds")
         return {
             "encoder_input_ids": encoder_input_ids_padded,
             "decoder_input_ids": decoder_input_ids_padded,
@@ -260,6 +267,7 @@ def create_dataloader(
     )
     print(f"Done")
 
+    Path("dataloader/").mkdir(parents=True, exist_ok=True)
     data_loader_path = "dataloader/" + source_lang + "_" + target_lang + ".pth"
     print(f"Saving DataLoader: {data_loader_path}")
     torch.save(data_loader, data_loader_path)

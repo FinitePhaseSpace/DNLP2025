@@ -1,6 +1,9 @@
 import os
+import time
+
 import torch
 from torch import nn, optim
+from torch.utils.data import DataLoader
 
 # from src.dnlp2025.model import AIAYNModel
 # from src.dnlp2025.dataset import create_dataloader
@@ -61,22 +64,21 @@ def train():
     checkpoint_path = "checkpoints/aiayn.pt"
     os.makedirs("checkpoints", exist_ok=True)
 
-    dataloder_path = ""
+    # --- Tokenizer ---
+    print(f"Loading Tokenizer")
+    tokenizer = Tokenizer.from_file("tokenizers/de_en_tokenizer.json")
+    vocab_size = len(tokenizer.get_vocab())
+    pad_token_id = tokenizer.token_to_id("<pad>")
+
     train_loader = None
     if os.path.isfile("dataloader/de_en.pth"):
         print("\n>>>>>     Loading Dataloader from File!!!     <<<<<<\n")
-        train_loader = torch.load("dataloader/de_en.pth")
+        train_loader = torch.load("dataloader/de_en.pth", weights_only=False)
     else:
-        # --- Tokenizer ---
-        print(f"Loading Tokenizer")
-        tokenizer = Tokenizer.from_file("tokenizers/de_en_tokenizer.json")
-        vocab_size = len(tokenizer.get_vocab())
-        pad_token_id = tokenizer.token_to_id("<pad>")
-
         # --- Data ---
-        #TODO are we splitting correctly? ( i disabled the next block, create_dataloader already names something train internally!
-        print(f"Loading and Tokenizing Dataset: Train")
+        print(f"Loading and Tokenizing Dataset")
         dataset = download_wmt14_de_en()
+        t0 = time.time()
         train_loader = create_dataloader(
             dataset_split=dataset["train"],
             dataset_split_name="train",
@@ -87,6 +89,8 @@ def train():
             target_lang="en",
             num_workers=0,
         )
+        t1 = time.time()
+        print(f"Total df time: {t1 - t0} seconds")
         print(f"Finished and Tokenizing Dataset: Train")
 
 
@@ -104,7 +108,7 @@ def train():
         #print(f"Finished and Tokenizing Dataset: Validation")
 
     # --- Model ---
-    model = AIAYNModel(layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1).to(
+    model = AIAYNModel(vocab_size=vocab_size, layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1).to(
         device
     )
 
