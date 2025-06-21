@@ -64,8 +64,8 @@ def positional_encoding(max_len, d_model):
     pe[:, 1::2] = torch.cos(position * div_term)
     #Change dim ? TODO is this correct? probably, we get batched inputs and need to add the batch dim
     pe.unsqueeze_(0)
-
-    return pe
+    #manally switch to cuda, model.to(device) wont set this for some reason
+    return pe.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
 def subsequent_mask(size):
     "Mask out subsequent positions."
