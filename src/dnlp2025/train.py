@@ -59,7 +59,7 @@ def train():
     # --- Config ---
     device = get_device()
     epochs = 10
-    max_tokens_per_batch = 20000
+    max_tokens_per_batch = 2000
     learning_rate = 3e-4
     checkpoint_path = "checkpoints/aiayn.pt"
     os.makedirs("checkpoints", exist_ok=True)
