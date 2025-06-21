@@ -13,6 +13,15 @@ echo 'export PATH="/home/jovyan/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
+Install on VM:
+```
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+Otherwise, this also works to run poetry once it is installed (on the vm):
+```
+~/.local/share/pypoetry/venv/bin/poetry
+```
 PyCharm Venv:
 
 ```
