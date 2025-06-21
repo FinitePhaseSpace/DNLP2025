@@ -11,28 +11,55 @@ from src.dnlp2025.encoder_decoder import EncoderDecoder
 
 # TODO share wight matrix between embeddings and linear out?!
 class AIAYNModel(nn.Module):
-    def __init__(self, vocab_size, layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1) -> None:
+    def __init__(
+        self, vocab_size, layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1
+    ) -> None:
         super(AIAYNModel, self).__init__()
         self.embedding_in = nn.Embedding(vocab_size, dimension)
+        self.embedding_out = nn.Embedding(vocab_size, dimension)
         self.embedding_in_drop = nn.Dropout(dropout)
         self.embedding_out_drop = nn.Dropout(dropout)
-        self.embedding_out = nn.Embedding(vocab_size, dimension)
-        # todo set to 5000, ok?
+        # todo set to 5000, ok? yes
         self.pe = positional_encoding(5000, dimension)
-        self.encoder_decoder = EncoderDecoder(layers=layers, dimension=dimension, ffn_dim=ffn_dim, heads=heads, dropout=dropout)
+        self.encoder_decoder = EncoderDecoder(
+            layers=layers,
+            dimension=dimension,
+            ffn_dim=ffn_dim,
+            heads=heads,
+            dropout=dropout,
+        )
         self.linear = nn.Linear(dimension, vocab_size)
 
-    def forward(self, enc_input, enc_mask, dec_input, dec_mask):
-        #add dropout!
+    # def forward(self, enc_input, enc_mask, dec_input, dec_mask):
+    def forward(
+        self,
+        enc_input,
+        enc_mask,
+        dec_input,
+        dec_mask,
+        tgt_key_padding_mask,
+        memory_key_padding_mask,
+    ):
+        # add dropout!
         enc_in = self.embedding_in(enc_input)
-        enc_in = enc_in + self.pe[:, : enc_input.size(1)].requires_grad_(False)
-        enc_in =self.embedding_in_drop(enc_in)
+        # enc_in = enc_in + self.pe[:, : enc_input.size(1)].requires_grad_(False)
+        enc_in = enc_in + self.pe[:, : enc_input.size(1)].detach()
+        enc_in = self.embedding_in_drop(enc_in)
 
         dec_in = self.embedding_out(dec_input)
-        dec_in = dec_in + self.pe[:, : dec_input.size(1)].requires_grad_(False)
-        dec_in =self.embedding_out_drop(dec_in)
+        # dec_in = dec_in + self.pe[:, : dec_input.size(1)].requires_grad_(False)
+        dec_in = dec_in + self.pe[:, : dec_input.size(1)].detach()
+        dec_in = self.embedding_out_drop(dec_in)
 
-        x = self.encoder_decoder(enc_in, enc_mask, dec_in, dec_mask)
+        # x = self.encoder_decoder(enc_in, enc_mask, dec_in, dec_mask)
+        x = self.encoder_decoder(
+            in_encoder=enc_in,
+            mask_encoder=enc_mask,
+            in_decoder=dec_in,
+            mask_decoder=dec_mask,
+            tgt_key_padding_mask=tgt_key_padding_mask,
+            memory_key_padding_mask=memory_key_padding_mask,
+        )
 
         return log_softmax(self.linear(x), dim=-1)
 
@@ -42,7 +69,6 @@ class AIAYNModel(nn.Module):
 
     def load(self, path: FileLike) -> None:
         self.load_state_dict(torch.load(path, weights_only=False))
-
 
 
 def positional_encoding(max_len, d_model):
@@ -62,18 +88,18 @@ def positional_encoding(max_len, d_model):
 
     pe[:, 0::2] = torch.sin(position * div_term)
     pe[:, 1::2] = torch.cos(position * div_term)
-    #Change dim ? TODO is this correct? probably, we get batched inputs and need to add the batch dim
+    # Change dim ? TODO is this correct? probably, we get batched inputs and need to add the batch dim
     pe.unsqueeze_(0)
-    #manally switch to cuda, model.to(device) wont set this for some reason
+    # manally switch to cuda, model.to(device) wont set this for some reason
     return pe.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+
 
 def subsequent_mask(size):
     "Mask out subsequent positions."
     attn_shape = (1, size, size)
-    subseq_mask = torch.triu(torch.ones(attn_shape), diagonal=1).type(
-        torch.uint8
-    )
+    subseq_mask = torch.triu(torch.ones(attn_shape), diagonal=1).type(torch.uint8)
     return subseq_mask == 0
+
 
 # Test code
 def try_model():
@@ -85,12 +111,29 @@ def try_model():
 
     # Generate a random batch of token IDs
     input_tensor = torch.randint(0, vocab_size, (batch_size, seq_len))
+    enc_mask = None  # not used explicitly
+    dec_input = input_tensor.clone()
+    dec_mask = subsequent_mask(seq_len).to(input_tensor.device)
+    tgt_key_padding_mask = dec_input == 0
+    memory_key_padding_mask = input_tensor == 0
 
     with torch.no_grad():
-        output = model(input_tensor)
+        output = model(
+            input_tensor,
+            enc_mask,
+            dec_input,
+            dec_mask,
+            tgt_key_padding_mask,
+            memory_key_padding_mask,
+        )
+
+    # with torch.no_grad():
+    #     output = model(input_tensor)
 
     print(f"Input shape: {input_tensor.shape}")
-    print(f"Output shape: {output.shape}")  # Expected: (batch_size, seq_len, vocab_size)
+    print(
+        f"Output shape: {output.shape}"
+    )  # Expected: (batch_size, seq_len, vocab_size)
     print(f"Sample output (logits):\n{output[0]}")
 
     print(f"Predicted token id:{output[0].argmax(dim=-1)}")
@@ -115,18 +158,34 @@ def generate_sequence(model, input_seq, max_new_tokens, vocab_size):
     generated = input_seq.clone()
 
     for _ in range(max_new_tokens):
+        dec_input = generated
+        dec_mask = subsequent_mask(dec_input.size(1)).to(generated.device)
+        tgt_key_padding_mask = dec_input == 0
+        memory_key_padding_mask = input_seq == 0
+
         with torch.no_grad():
-            # Forward pass → get logits
-            output = model(generated)
-
-            # Get logits for the *last* position → shape: [batch_size, vocab_size]
+            output = model(
+                input_seq,
+                None,
+                dec_input,
+                dec_mask,
+                tgt_key_padding_mask,
+                memory_key_padding_mask,
+            )
             next_token_logits = output[:, -1, :]
+            next_token = next_token_logits.argmax(dim=-1, keepdim=True)
+            generated = torch.cat([generated, next_token], dim=1)
+            # # Forward pass → get logits
+            # output = model(generated)
 
-            # Greedy decoding → pick the most probable token
-            next_token = next_token_logits.argmax(dim=-1, keepdim=True)  # [batch_size, 1]
+            # # Get logits for the *last* position → shape: [batch_size, vocab_size]
+            # next_token_logits = output[:, -1, :]
 
-            # Append the predicted token to the sequence
-            generated = torch.cat([generated, next_token], dim=1)  # [batch_size, seq_len + 1]
+            # # Greedy decoding → pick the most probable token
+            # next_token = next_token_logits.argmax(dim=-1, keepdim=True)  # [batch_size, 1]
+
+            # # Append the predicted token to the sequence
+            # generated = torch.cat([generated, next_token], dim=1)  # [batch_size, seq_len + 1]
 
     return generated
 
@@ -144,9 +203,9 @@ def try_sequence_gen():
 
 
 if __name__ == "__main__":
-    print("Tests are broken, they were implemented before correcting the network to use masks and input +output")
+    print(
+        "Tests are broken, they were implemented before correcting the network to use masks and input +output"
+    )
     try_model()
 
     try_sequence_gen()
-
-
