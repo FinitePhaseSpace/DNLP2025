@@ -136,7 +136,6 @@ class TranslationBatchCollator:
     def __call__(self, batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
         # Assumes each item in 'batch' is a dictionary:
         # {'encoder_input_ids': tensor, 'decoder_input_ids': tensor, 'labels': tensor}
-        t0 = time.time()
         encoder_input_ids_list = [item["encoder_input_ids"] for item in batch]
         decoder_input_ids_list = [item["decoder_input_ids"] for item in batch]
         labels_list = [item["labels"] for item in batch]
@@ -158,8 +157,6 @@ class TranslationBatchCollator:
         tgt_mask = nn.Transformer.generate_square_subsequent_mask(  # Causal mask
             tgt_len, device=decoder_input_ids_padded.device
         )
-        t1 = time.time()
-        print(f"collator time: {t1 - t0} seconds")
         return {
             "encoder_input_ids": encoder_input_ids_padded,
             "decoder_input_ids": decoder_input_ids_padded,
