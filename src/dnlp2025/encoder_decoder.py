@@ -15,16 +15,13 @@ class EncoderDecoder(nn.Module):
         self.decoder = nn.ModuleList([
             DecoderLayer(m_dim=dimension, ffn_dim=ffn_dim, heads=heads, dropout=dropout) for i in range(layers)
         ])
-        # TODO linear + softmax
         pass
 
-    def forward(self, in_encoder, in_decoder):
+    def forward(self, in_encoder, mask_encoder, in_decoder, mask_decoder):
         for encoder in self.encoder:
-            #TODO add mask
-            in_encoder = encoder(in_encoder)
+            in_encoder = encoder(in_encoder, mask_encoder)
 
         for decoder in self.decoder:
-            # TODO add mask
-            in_decoder = decoder(x=in_decoder, encoder_out=in_encoder)
+            in_decoder = decoder(x=in_decoder, encoder_out=in_encoder, mask_encoder=mask_encoder, mask_decoder=mask_decoder)
 
         return in_decoder

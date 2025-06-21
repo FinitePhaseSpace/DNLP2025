@@ -139,14 +139,19 @@ def train():
 
             encoder_input = batch["encoder_input_ids"]
             decoder_input = batch["decoder_input_ids"]
+            target_mask = batch["target_mask"]
             labels = batch["labels"]
+            src_mask = batch["source_key_padding_mask"]
 
             # Forward
-            output = model(encoder_input, decoder_input)
-            logits = output_projection(output)  # [B, T, vocab_size]
+            #TODO add masks (currently they dont work (wrong shape) and i think the values in there are wrong! (debug))
+            # TODO target mask is also wrong! it should be: mask all the padding, mask all subsequent tokens
+            output = model(encoder_input, None, decoder_input, None)
+            # --> the model already outputs [B, T, vocab_size] TODO verify
+            #logits = output_projection(output)  # [B, T, vocab_size]
 
             # Compute loss
-            loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
+            loss = criterion(output.view(-1, output.size(-1)), labels.view(-1))
             loss.backward()
 
             optimizer.step()

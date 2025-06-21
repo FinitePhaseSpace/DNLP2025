@@ -164,6 +164,8 @@ class TranslationBatchCollator:
             "encoder_input_ids": encoder_input_ids_padded,
             "decoder_input_ids": decoder_input_ids_padded,
             "labels": labels_padded,
+            #TODO we need to change the shape here?
+            #TODO we need to change the shape here?
             "source_key_padding_mask": src_key_padding_mask,  # For encoder
             "target_key_padding_mask": tgt_key_padding_mask,  # For decoder self-attention
             "target_mask": tgt_mask,  # For decoder self-attention (causal)

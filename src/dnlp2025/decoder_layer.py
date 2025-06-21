@@ -23,7 +23,7 @@ class DecoderLayer(nn.Module):
         self.ffn_norm = nn.LayerNorm(m_dim)
         self.ffn_dropout = nn.Dropout(dropout)
 
-    def forward(self, x, encoder_out, mask=None):
+    def forward(self, x, encoder_out, mask_encoder=None, mask_decoder=None):
         #In "encoder-decoder attention" layers, the queries come from the previous decoder layer,
         # and the memory keys and values come from the output of the encoder.
         # *** MHA 1
@@ -32,7 +32,7 @@ class DecoderLayer(nn.Module):
         key = self.mha1_key_projection(x)
         query = self.mha1_query_projection(x)
         value = self.mha1_value_projection(x)
-        multi_head_out, mha1_weights = self.mha1(query, key, value, attn_mask=mask)
+        multi_head_out, mha1_weights = self.mha1(query, key, value, attn_mask=mask_decoder)
         #add residual + norm
         mha1_out = self.mha1_norm(multi_head_out + residual)
 
@@ -43,7 +43,7 @@ class DecoderLayer(nn.Module):
         key = self.mha2_key_projection(encoder_out)
         query = self.mha2_query_projection(x)
         value = self.mha2_value_projection(encoder_out)
-        multi_head_out, mha2_weights = self.mha2(query, key, value, attn_mask=mask)
+        multi_head_out, mha2_weights = self.mha2(query, key, value, attn_mask=mask_encoder)
         #add residual + norm
         mha2_out = self.mha2_norm(multi_head_out + residual)
 

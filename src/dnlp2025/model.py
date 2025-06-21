@@ -22,18 +22,17 @@ class AIAYNModel(nn.Module):
         self.encoder_decoder = EncoderDecoder(layers=layers, dimension=dimension, ffn_dim=ffn_dim, heads=heads, dropout=dropout)
         self.linear = nn.Linear(dimension, vocab_size)
 
-    def forward(self, x):
-        # TODO add mask
+    def forward(self, enc_input, enc_mask, dec_input, dec_mask):
         #add dropout!
-        enc_in = self.embedding_in(x)
-        enc_in = enc_in + self.pe[:, : x.size(1)].requires_grad_(False)
+        enc_in = self.embedding_in(enc_input)
+        enc_in = enc_in + self.pe[:, : enc_input.size(1)].requires_grad_(False)
         enc_in =self.embedding_in_drop(enc_in)
 
-        dec_in = self.embedding_out(x)
-        dec_in = dec_in + self.pe[:, : x.size(1)].requires_grad_(False)
+        dec_in = self.embedding_out(dec_input)
+        dec_in = dec_in + self.pe[:, : dec_input.size(1)].requires_grad_(False)
         dec_in =self.embedding_out_drop(dec_in)
 
-        x = self.encoder_decoder(enc_in, dec_in)
+        x = self.encoder_decoder(enc_in, enc_mask, dec_in, dec_mask)
 
         return log_softmax(self.linear(x), dim=-1)
 
@@ -68,6 +67,13 @@ def positional_encoding(max_len, d_model):
 
     return pe
 
+def subsequent_mask(size):
+    "Mask out subsequent positions."
+    attn_shape = (1, size, size)
+    subseq_mask = torch.triu(torch.ones(attn_shape), diagonal=1).type(
+        torch.uint8
+    )
+    return subseq_mask == 0
 
 # Test code
 def try_model():
@@ -95,7 +101,7 @@ def generate_sequence(model, input_seq, max_new_tokens, vocab_size):
     Generate sequences token by token.
 
     Args:
-        model: Your transformer model (expects [batch_size, seq_len] input)
+        model: transformer model (expects [batch_size, seq_len] input)
         input_seq: Tensor of shape [batch_size, seq_len] → initial sequence
         max_new_tokens: Number of tokens to generate
         vocab_size: Size of vocabulary (optional, for clarity)
@@ -138,6 +144,7 @@ def try_sequence_gen():
 
 
 if __name__ == "__main__":
+    print("Tests are broken, they were implemented before correcting the network to use masks and input +output")
     try_model()
 
     try_sequence_gen()
