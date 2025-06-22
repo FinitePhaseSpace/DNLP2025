@@ -247,6 +247,12 @@ def create_dataloader(
         ],
     )
 
+    #to fix tensor issue
+    
+    max_src_len = max(tokenized_dataset["source_length"])
+    max_tgt_len = max(tokenized_dataset["target_length"])
+    max_seq_len = max(max_src_len, max_tgt_len)
+
     token_batch_sampler = TokenBatchSampler(
         tokenized_dataset,
         max_src_tokens_per_batch=max_tokens_per_batch,
@@ -270,4 +276,4 @@ def create_dataloader(
     data_loader_path = "dataloader/" + source_lang + "_" + target_lang + ".pth"
     print(f"Saving DataLoader: {data_loader_path}")
     torch.save(data_loader, data_loader_path)
-    return data_loader
+    return data_loader, max_seq_len

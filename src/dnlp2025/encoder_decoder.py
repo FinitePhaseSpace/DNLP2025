@@ -40,7 +40,7 @@ class EncoderDecoder(nn.Module):
     ):
 
         for encoder in self.encoder:
-            in_encoder = encoder(in_encoder, mask_encoder)
+            in_encoder = encoder(in_encoder, key_padding_mask=mask_encoder)
 
         for decoder in self.decoder:
             # in_decoder = decoder(x=in_decoder, encoder_out=in_encoder, mask_encoder=mask_encoder, mask_decoder=mask_decoder)

@@ -50,7 +50,8 @@ class DecoderLayer(nn.Module):
         value = self.mha1_value_projection(x)
         # multi_head_out, mha1_weights = self.mha1(query, key, value, attn_mask=mask_decoder)
         multi_head_out, mha1_weights = self.mha1(
-            query, key, value, attn_mask=tgt_mask, key_padding_mask=tgt_key_padding_mask
+            query, key, value, attn_mask=tgt_mask, 
+            key_padding_mask=tgt_key_padding_mask
         )
         # add residual + norm
         mha1_out = self.mha1_norm(multi_head_out + residual)
@@ -60,7 +61,7 @@ class DecoderLayer(nn.Module):
         # output dim =512
         # use encoder output for key and values
         key = self.mha2_key_projection(encoder_out)
-        query = self.mha2_query_projection(x)
+        query = self.mha2_query_projection(mha1_out)
         value = self.mha2_value_projection(encoder_out)
         # multi_head_out, mha2_weights = self.mha2(query, key, value, attn_mask=mask_encoder)
         multi_head_out, mha2_weights = self.mha2(

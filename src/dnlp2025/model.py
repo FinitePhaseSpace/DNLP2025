@@ -12,15 +12,16 @@ from src.dnlp2025.encoder_decoder import EncoderDecoder
 # TODO share wight matrix between embeddings and linear out?!
 class AIAYNModel(nn.Module):
     def __init__(
-        self, vocab_size, layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1
+        self, vocab_size, layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1, max_seq_len=4000
     ) -> None:
         super(AIAYNModel, self).__init__()
         self.embedding_in = nn.Embedding(vocab_size, dimension)
         self.embedding_out = nn.Embedding(vocab_size, dimension)
         self.embedding_in_drop = nn.Dropout(dropout)
         self.embedding_out_drop = nn.Dropout(dropout)
+        # self.scale = math.sqrt(dimension)
         # todo set to 5000, ok? yes
-        self.pe = positional_encoding(5000, dimension)
+        self.pe = positional_encoding(max_seq_len, dimension)
         self.encoder_decoder = EncoderDecoder(
             layers=layers,
             dimension=dimension,
@@ -94,11 +95,9 @@ def positional_encoding(max_len, d_model):
     return pe.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
 
-def subsequent_mask(size):
-    "Mask out subsequent positions."
-    attn_shape = (1, size, size)
-    subseq_mask = torch.triu(torch.ones(attn_shape), diagonal=1).type(torch.uint8)
-    return subseq_mask == 0
+def subsequent_mask(size: int) -> torch.Tensor:
+    """Return a [T, T] mask where subsequent positions are masked (upper triangular)."""
+    return torch.triu(torch.ones(size, size), diagonal=1).bool()  # [T, T]
 
 
 # Test code

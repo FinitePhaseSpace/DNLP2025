@@ -4,13 +4,15 @@ import time
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import LambdaLR
 
 # from src.dnlp2025.model import AIAYNModel
 # from src.dnlp2025.dataset import create_dataloader
 # from src.dnlp2025.download_datasets import download_wmt14_de_en
-from src.dnlp2025.model import AIAYNModel
+from src.dnlp2025.model import AIAYNModel, subsequent_mask
 from src.dnlp2025.dataset import create_dataloader
 from src.dnlp2025.download_datasets import download_wmt14_de_en
+from src.dnlp2025.losses import LabelSmoothingLoss
 from tokenizers import Tokenizer
 from src.dnlp2025.check import get_device
 
@@ -54,33 +56,69 @@ def load_checkpoint(model, optimizer, train_state, path):
         return True
     return False
 
+def rate(step, model_size, factor, warmup):
+    if step == 0:
+        step = 1
+    return factor * (model_size ** -0.5 * min(step ** -0.5, step * warmup ** -1.5))
 
-def train():
+
+def train(model_size=512, factor=1.0, warmup=4000):
     # --- Config ---
     device = get_device()
     epochs = 10
     max_tokens_per_batch = 1000
-    learning_rate = 3e-4
-    checkpoint_path = "checkpoints/aiayn.pt"
-    os.makedirs("checkpoints", exist_ok=True)
+    learning_rate = 1.0 #3e-4
+    checkpoint_dir = os.path.join(os.path.expanduser("~"), "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    checkpoint_path = os.path.join(checkpoint_dir, "aiayn.pt")
+    dataset_percentage = 0.5
+
 
     # --- Tokenizer ---
     print(f"Loading Tokenizer")
-    tokenizer = Tokenizer.from_file("tokenizers/de_en_tokenizer.json")
+    # tokenizer = Tokenizer.from_file("tokenizers/de_en_tokenizer.json")
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    tokenizer_path = os.path.join(project_root, "tokenizers", "de_en_tokenizer.json")
+
+    print(f"Loading tokenizer from: {tokenizer_path}")
+    tokenizer = Tokenizer.from_file(tokenizer_path)
+
     vocab_size = len(tokenizer.get_vocab())
     pad_token_id = tokenizer.token_to_id("<pad>")
 
     train_loader = None
+    max_seq_len = None
+
     if os.path.isfile("dataloader/de_en.pth"):
         print("\n>>>>>     Loading Dataloader from File!!!     <<<<<<\n")
         train_loader = torch.load("dataloader/de_en.pth", weights_only=False)
+    
+        max_seq_len_path = "dataloader/max_seq_len.txt"
+        if os.path.isfile(max_seq_len_path):
+            with open(max_seq_len_path, "r") as f:
+                max_seq_len = int(f.read().strip())
+        else:
+            raise FileNotFoundError(
+                f"Expected max_seq_len file at {max_seq_len_path} but it was not found. "
+                "Please delete the cached dataloader file and rerun to regenerate both."
+            )
     else:
+        
         # --- Data ---
         print(f"Loading and Tokenizing Dataset")
+        
         dataset = download_wmt14_de_en()
+        full_dataset = dataset["train"]
+        subset_size = int(len(full_dataset) * dataset_percentage)
+        
+        # Optional: shuffle for random subset
+        full_dataset = full_dataset.shuffle(seed=42)
+        subset_size = int(len(full_dataset) * dataset_percentage)
+        subset_dataset = full_dataset.select(range(subset_size))
+        
         t0 = time.time()
-        train_loader = create_dataloader(
-            dataset_split=dataset["train"],
+        train_loader, max_seq_len = create_dataloader(
+            dataset_split=subset_dataset,#dataset["train"],
             dataset_split_name="train",
             tokenizer=tokenizer,
             max_tokens_per_batch=max_tokens_per_batch,
@@ -89,6 +127,12 @@ def train():
             target_lang="en",
             num_workers=0,
         )
+        
+        # Save max_seq_len for future use
+        os.makedirs("dataloader", exist_ok=True)
+        with open("dataloader/max_seq_len.txt", "w") as f:
+            f.write(str(max_seq_len))
+
         t1 = time.time()
         print(f"Total df time: {t1 - t0} seconds")
         print(f"Finished and Tokenizing Dataset: Train")
@@ -108,18 +152,26 @@ def train():
         #print(f"Finished and Tokenizing Dataset: Validation")
 
     # --- Model ---
-    model = AIAYNModel(vocab_size=vocab_size, layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1).to(
+    model = AIAYNModel(vocab_size=vocab_size, layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1, max_seq_len=max_seq_len).to(
         device
     )
 
-    output_projection = nn.Linear(512, vocab_size).to(device)
+    # output_projection = nn.Linear(512, vocab_size).to(device)
 
-    # --- Optimizer & Loss ---
+    # --- Optimizer ---
     optimizer = optim.Adam(
         model.parameters(), lr=learning_rate, betas=(0.9, 0.98), eps=1e-9
     )
-    criterion = nn.CrossEntropyLoss(ignore_index=pad_token_id)
+    lr_scheduler = LambdaLR(optimizer, lr_lambda=lambda step: rate(step, model_size, factor, warmup))
 
+
+    # --- Loss ---
+    label_smoothing = 0.1  # You can tweak this value
+    criterion = LabelSmoothingLoss(
+        label_smoothing=label_smoothing,
+        vocab_size=vocab_size,
+        ignore_index=pad_token_id
+    )
     # --- Train State ---
     train_state = TrainState()
 
@@ -139,22 +191,43 @@ def train():
 
             encoder_input = batch["encoder_input_ids"]
             decoder_input = batch["decoder_input_ids"]
-            target_mask = batch["target_mask"]
+            # target_mask = batch["target_mask"]
             labels = batch["labels"]
-            src_mask = batch["source_key_padding_mask"]
+            # src_mask = batch["source_key_padding_mask"]
 
             # Forward
             #TODO add masks (currently they dont work (wrong shape) and i think the values in there are wrong! (debug))
             # TODO target mask is also wrong! it should be: mask all the padding, mask all subsequent tokens
-            output = model(encoder_input, None, decoder_input, None)
+            pad_mask_enc = encoder_input == pad_token_id
+            pad_mask_dec = decoder_input == pad_token_id
+
+            # Create subsequent mask [1, T, T] → broadcastable in MultiheadAttention
+            seq_len = decoder_input.size(1)
+            T = decoder_input.size(1)
+            subsequent = subsequent_mask(T).to(device)  # shape [T, T]
+
+
+            
+            output = model(
+                encoder_input,
+                None,  # enc_mask if needed
+                decoder_input,
+                subsequent,
+                tgt_key_padding_mask=pad_mask_dec,
+                memory_key_padding_mask=pad_mask_enc,
+            )
+            #output = model(encoder_input, None, decoder_input, None)
             # --> the model already outputs [B, T, vocab_size] TODO verify
             #logits = output_projection(output)  # [B, T, vocab_size]
 
             # Compute loss
-            loss = criterion(output.view(-1, output.size(-1)), labels.view(-1))
+            # loss = criterion(output.view(-1, output.size(-1)), labels.view(-1))
+            loss = criterion(output, labels)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
             optimizer.step()
+            lr_scheduler.step()
             optimizer.zero_grad()
 
             # Update train state

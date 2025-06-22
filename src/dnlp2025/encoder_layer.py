@@ -29,7 +29,7 @@ class EncoderLayer(nn.Module):
         # self.sub2_norm = nn.LayerNorm(m_dim)
         # self.sub2_dropout = nn.Dropout(dropout)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, key_padding_mask=None):
         # positional encoding has to happen before!
         # *** Sub Layer 1
         residual = x
