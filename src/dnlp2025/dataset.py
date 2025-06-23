@@ -62,7 +62,7 @@ class TokenBatchSampler(Sampler[list[int]]):
         print(f"Creating Batches")
         self.batches = self._create_batches()
 
-        del lengths_and_indices
+        del self.lengths_and_indices
 
         print(f"Batches created")
         t1 = time.time()
