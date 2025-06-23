@@ -87,21 +87,12 @@ def train(model_size=512, factor=1.0, warmup=4000):
     pad_token_id = tokenizer.token_to_id("<pad>")
 
     train_loader = None
-    max_seq_len = None
+    max_seq_len = 128
 
     if os.path.isfile("dataloader/de_en.pth"):
         print("\n>>>>>     Loading Dataloader from File!!!     <<<<<<\n")
         train_loader = torch.load("dataloader/de_en.pth", weights_only=False)
-    
-        max_seq_len_path = "dataloader/max_seq_len.txt"
-        if os.path.isfile(max_seq_len_path):
-            with open(max_seq_len_path, "r") as f:
-                max_seq_len = int(f.read().strip())
-        else:
-            raise FileNotFoundError(
-                f"Expected max_seq_len file at {max_seq_len_path} but it was not found. "
-                "Please delete the cached dataloader file and rerun to regenerate both."
-            )
+
     else:
         
         # --- Data ---
@@ -117,7 +108,7 @@ def train(model_size=512, factor=1.0, warmup=4000):
         subset_dataset = full_dataset.select(range(subset_size))
         
         t0 = time.time()
-        train_loader, max_seq_len = create_dataloader(
+        train_loader = create_dataloader(
             dataset_split=subset_dataset,#dataset["train"],
             dataset_split_name="train",
             tokenizer=tokenizer,
@@ -126,6 +117,7 @@ def train(model_size=512, factor=1.0, warmup=4000):
             source_lang="de",
             target_lang="en",
             num_workers=0,
+            max_seq_len=max_seq_len
         )
         
         # Save max_seq_len for future use

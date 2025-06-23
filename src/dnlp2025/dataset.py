@@ -61,6 +61,9 @@ class TokenBatchSampler(Sampler[list[int]]):
         self.lengths_and_indices.sort(key=lambda x: x["source_length"])
         print(f"Creating Batches")
         self.batches = self._create_batches()
+
+        del lengths_and_indices
+
         print(f"Batches created")
         t1 = time.time()
         print(f"TokenBatchSampler took {t1 - t0} seconds")
@@ -178,6 +181,7 @@ def create_dataloader(
     source_lang="en",
     target_lang="de",
     num_workers=0,
+    max_seq_len=128,
 ):
     """
     Create a DataLoader for the translation dataset.
@@ -236,6 +240,11 @@ def create_dataloader(
     )
     print(f"dataset.py: Tokenization Done")
 
+    # Filter out examples longer than max_seq_len
+    tokenized_dataset = tokenized_dataset.filter(
+        lambda x: x["source_length"] <= max_seq_len and x["target_length"] <= max_seq_len
+    )
+
     tokenized_dataset.set_format(
         type="torch",
         columns=[
@@ -246,12 +255,6 @@ def create_dataloader(
             "target_length",
         ],
     )
-
-    #to fix tensor issue
-    
-    max_src_len = max(tokenized_dataset["source_length"])
-    max_tgt_len = max(tokenized_dataset["target_length"])
-    max_seq_len = max(max_src_len, max_tgt_len)
 
     token_batch_sampler = TokenBatchSampler(
         tokenized_dataset,
@@ -276,4 +279,4 @@ def create_dataloader(
     data_loader_path = "dataloader/" + source_lang + "_" + target_lang + ".pth"
     print(f"Saving DataLoader: {data_loader_path}")
     torch.save(data_loader, data_loader_path)
-    return data_loader, max_seq_len
+    return data_loader
