@@ -26,6 +26,7 @@ class TokenBatchSampler(Sampler[list[int]]):
         max_tgt_tokens_per_batch: int,
         shuffle_batches: bool = True,
         drop_last: bool = False,
+        gradient_accumulation_steps: int = 1
     ):
         super().__init__(dataset)
         self.dataset = dataset
@@ -33,6 +34,7 @@ class TokenBatchSampler(Sampler[list[int]]):
         self.max_tgt_tokens_per_batch = max_tgt_tokens_per_batch
         self.shuffle_batches = shuffle_batches
         self.drop_last = drop_last
+        self.gradient_accumulation_steps = gradient_accumulation_steps
 
         # Get lengths and original indices
         # This might load all lengths into memory. Might be problematic for the french dataset.
@@ -122,7 +124,14 @@ class TokenBatchSampler(Sampler[list[int]]):
         if self.shuffle_batches:
             random.shuffle(self.batches)
         for batch in self.batches:
-            yield batch
+            if self.gradient_accumulation_steps > 1:
+                # Split batch into gradient_accumulation_steps smaller batches
+                batch_size = len(batch)
+                step_size = max(1, batch_size // self.gradient_accumulation_steps)
+                for i in range(0, batch_size, step_size):
+                    yield batch[i:i + step_size]
+            else:
+                yield batch
 
     def __len__(self):
         return len(self.batches)
@@ -177,6 +186,7 @@ def create_dataloader(
     dataset_split_name,
     tokenizer,
     max_tokens_per_batch=25000,
+    gradient_accumulation_steps=1,
     shuffle=True,
     source_lang="en",
     target_lang="de",
@@ -262,6 +272,7 @@ def create_dataloader(
         max_tgt_tokens_per_batch=max_tokens_per_batch,
         shuffle_batches=shuffle,
         drop_last=(dataset_split_name == "train"),  # Drop last incomplete batch
+        gradient_accumulation_steps=gradient_accumulation_steps,
     )
 
     collator = TranslationBatchCollator(pad_token_id=pad_token_id)

@@ -66,12 +66,13 @@ def train(model_size=512, factor=1.0, warmup=4000):
     # --- Config ---
     device = get_device()
     epochs = 10
-    max_tokens_per_batch = 1000
+    max_tokens_per_batch = 25000
+    gradient_accumulation_steps = 5  # Accumulate over 5 smaller batches
     learning_rate = 1.0 #3e-4
     checkpoint_dir = os.path.join(os.path.expanduser("~"), "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
     checkpoint_path = os.path.join(checkpoint_dir, "aiayn.pt")
-    dataset_percentage = 0.5
+    dataset_percentage = 1
 
 
     # --- Tokenizer ---
@@ -212,26 +213,32 @@ def train(model_size=512, factor=1.0, warmup=4000):
             # --> the model already outputs [B, T, vocab_size] TODO verify
             #logits = output_projection(output)  # [B, T, vocab_size]
 
-            # Compute loss
-            # loss = criterion(output.view(-1, output.size(-1)), labels.view(-1))
+            # Compute loss and scale by accumulation steps
             loss = criterion(output, labels)
+            loss = loss / gradient_accumulation_steps  # Scale loss
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-            optimizer.step()
-            lr_scheduler.step()
-            optimizer.zero_grad()
+            # Only update weights every gradient_accumulation_steps
+            if (i + 1) % gradient_accumulation_steps == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+                lr_scheduler.step()
+                optimizer.zero_grad()
+                
+                # Clear VRAM cache periodically
+                if (i + 1) % (gradient_accumulation_steps * 10) == 0:
+                    torch.cuda.empty_cache()
 
             # Update train state
             train_state.step += 1
             train_state.samples += encoder_input.size(0)
             train_state.tokens += encoder_input.numel()
 
-            total_loss += loss.item()
+            total_loss += loss.item() * gradient_accumulation_steps  # Unscale for logging
 
             if i % 50 == 0:
                 print(
-                    f"[Step {i}] Loss: {loss.item():.4f} | "
+                    f"[Step {i}] Loss: {loss.item() * gradient_accumulation_steps:.4f} | "
                     f"Tokens: {train_state.tokens} | Samples: {train_state.samples}"
                 )
 
