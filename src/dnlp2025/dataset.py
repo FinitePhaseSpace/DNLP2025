@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn as nn
+import numpy as np
 
 import random
 import os
@@ -40,18 +41,17 @@ class TokenBatchSampler(Sampler[list[int]]):
         print(f"Extracting source Lengths")
 
         t0 = time.time()
-        source_lengths = torch.tensor([dataset[i]["source_length"] for i in range(len(dataset))])
-
-        print(f"Extracting target Lengths")
-        target_lengths = torch.tensor([dataset[i]["target_length"] for i in range(len(dataset))])
+        source_lengths = np.array(dataset["source_length"])
+        target_lengths = np.array(dataset["target_length"])
 
         mask = (source_lengths != 0) & (target_lengths != 0)
-        print(f"Extracting indices")
-        indices = torch.arange(len(dataset))[mask]
-        print(f"Adding indices and src/tar lengths to map")
+        valid_indices = np.where(mask)[0]
+        valid_src = source_lengths[mask]
+        valid_tgt = target_lengths[mask]
+
         self.lengths_and_indices = [
-            {"id": int(i), "source_length": int(src), "target_length": int(tgt)}
-            for i, src, tgt in zip(indices, source_lengths[mask], target_lengths[mask])
+            {"id": int(idx), "source_length": int(src), "target_length": int(tgt)}
+            for idx, src, tgt in zip(valid_indices, valid_src, valid_tgt)
         ]
 
         print(f"Done computing len_ind")
