@@ -114,6 +114,7 @@ def train(model_size=512, factor=1.0, warmup=4000):
             dataset_split_name="train",
             tokenizer=tokenizer,
             max_tokens_per_batch=max_tokens_per_batch,
+            gradient_accumulation_steps=gradient_accumulation_steps,
             shuffle=True,
             source_lang="de",
             target_lang="en",
