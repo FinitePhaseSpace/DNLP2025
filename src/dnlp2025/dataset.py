@@ -142,8 +142,9 @@ class TranslationBatchCollator:
     Collator for the translation dataset. Used to pad sequences and create masks.
     """
 
-    def __init__(self, pad_token_id: int):
+    def __init__(self, pad_token_id: int, ignore_index: int = -100):
         self.pad_token_id = pad_token_id
+        self.ignore_index = ignore_index
 
     def __call__(self, batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
         # Assumes each item in 'batch' is a dictionary:
@@ -159,7 +160,7 @@ class TranslationBatchCollator:
             decoder_input_ids_list, batch_first=True, padding_value=self.pad_token_id
         )
         labels_padded = pad_sequence(
-            labels_list, batch_first=True, padding_value=self.pad_token_id
+            labels_list, batch_first=True, padding_value=self.ignore_index
         )
 
         # --- MASK CREATION ---
@@ -192,6 +193,7 @@ def create_dataloader(
     target_lang="de",
     num_workers=0,
     max_seq_len=128,
+    ignore_index=-100,
 ):
     """
     Create a DataLoader for the translation dataset.
@@ -275,7 +277,7 @@ def create_dataloader(
         gradient_accumulation_steps=gradient_accumulation_steps,
     )
 
-    collator = TranslationBatchCollator(pad_token_id=pad_token_id)
+    collator = TranslationBatchCollator(pad_token_id=pad_token_id, ignore_index=ignore_index)
 
     print(f"Creating DataLoader using Batch TokenBatchSampler and TranslationBatchCollator")
     data_loader = DataLoader(
