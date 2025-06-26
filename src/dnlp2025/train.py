@@ -66,12 +66,13 @@ def train(model_size=512, factor=1.0, warmup=4000):
     # --- Config ---
     device = get_device()
     epochs = 10
-    max_tokens_per_batch = 1000
+    max_tokens_per_batch = 25000
+    gradient_accumulation_steps = 5  # Accumulate over 5 smaller batches
     learning_rate = 1.0 #3e-4
     checkpoint_dir = os.path.join(os.path.expanduser("~"), "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
     checkpoint_path = os.path.join(checkpoint_dir, "aiayn.pt")
-    dataset_percentage = 0.5
+    dataset_percentage = 1
 
 
     # --- Tokenizer ---
@@ -87,21 +88,12 @@ def train(model_size=512, factor=1.0, warmup=4000):
     pad_token_id = tokenizer.token_to_id("<pad>")
 
     train_loader = None
-    max_seq_len = None
+    max_seq_len = 128
 
     if os.path.isfile("dataloader/de_en.pth"):
         print("\n>>>>>     Loading Dataloader from File!!!     <<<<<<\n")
         train_loader = torch.load("dataloader/de_en.pth", weights_only=False)
-    
-        max_seq_len_path = "dataloader/max_seq_len.txt"
-        if os.path.isfile(max_seq_len_path):
-            with open(max_seq_len_path, "r") as f:
-                max_seq_len = int(f.read().strip())
-        else:
-            raise FileNotFoundError(
-                f"Expected max_seq_len file at {max_seq_len_path} but it was not found. "
-                "Please delete the cached dataloader file and rerun to regenerate both."
-            )
+
     else:
         
         # --- Data ---
@@ -117,15 +109,17 @@ def train(model_size=512, factor=1.0, warmup=4000):
         subset_dataset = full_dataset.select(range(subset_size))
         
         t0 = time.time()
-        train_loader, max_seq_len = create_dataloader(
+        train_loader = create_dataloader(
             dataset_split=subset_dataset,#dataset["train"],
             dataset_split_name="train",
             tokenizer=tokenizer,
             max_tokens_per_batch=max_tokens_per_batch,
+            gradient_accumulation_steps=gradient_accumulation_steps,
             shuffle=True,
             source_lang="de",
             target_lang="en",
             num_workers=0,
+            max_seq_len=max_seq_len
         )
         
         # Save max_seq_len for future use
@@ -220,26 +214,32 @@ def train(model_size=512, factor=1.0, warmup=4000):
             # --> the model already outputs [B, T, vocab_size] TODO verify
             #logits = output_projection(output)  # [B, T, vocab_size]
 
-            # Compute loss
-            # loss = criterion(output.view(-1, output.size(-1)), labels.view(-1))
+            # Compute loss and scale by accumulation steps
             loss = criterion(output, labels)
+            loss = loss / gradient_accumulation_steps  # Scale loss
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-            optimizer.step()
-            lr_scheduler.step()
-            optimizer.zero_grad()
+            # Only update weights every gradient_accumulation_steps
+            if (i + 1) % gradient_accumulation_steps == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+                lr_scheduler.step()
+                optimizer.zero_grad()
+                
+                # Clear VRAM cache periodically
+                if (i + 1) % (gradient_accumulation_steps * 10) == 0:
+                    torch.cuda.empty_cache()
 
             # Update train state
             train_state.step += 1
             train_state.samples += encoder_input.size(0)
             train_state.tokens += encoder_input.numel()
 
-            total_loss += loss.item()
+            total_loss += loss.item() * gradient_accumulation_steps  # Unscale for logging
 
             if i % 50 == 0:
                 print(
-                    f"[Step {i}] Loss: {loss.item():.4f} | "
+                    f"[Step {i}] Loss: {loss.item() * gradient_accumulation_steps:.4f} | "
                     f"Tokens: {train_state.tokens} | Samples: {train_state.samples}"
                 )
 

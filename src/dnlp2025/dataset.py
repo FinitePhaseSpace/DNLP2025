@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn as nn
+import numpy as np
 
 import random
 import os
@@ -25,6 +26,7 @@ class TokenBatchSampler(Sampler[list[int]]):
         max_tgt_tokens_per_batch: int,
         shuffle_batches: bool = True,
         drop_last: bool = False,
+        gradient_accumulation_steps: int = 1
     ):
         super().__init__(dataset)
         self.dataset = dataset
@@ -32,6 +34,7 @@ class TokenBatchSampler(Sampler[list[int]]):
         self.max_tgt_tokens_per_batch = max_tgt_tokens_per_batch
         self.shuffle_batches = shuffle_batches
         self.drop_last = drop_last
+        self.gradient_accumulation_steps = gradient_accumulation_steps
 
         # Get lengths and original indices
         # This might load all lengths into memory. Might be problematic for the french dataset.
@@ -40,18 +43,17 @@ class TokenBatchSampler(Sampler[list[int]]):
         print(f"Extracting source Lengths")
 
         t0 = time.time()
-        source_lengths = torch.tensor([dataset[i]["source_length"] for i in range(len(dataset))])
-
-        print(f"Extracting target Lengths")
-        target_lengths = torch.tensor([dataset[i]["target_length"] for i in range(len(dataset))])
+        source_lengths = np.array(dataset["source_length"])
+        target_lengths = np.array(dataset["target_length"])
 
         mask = (source_lengths != 0) & (target_lengths != 0)
-        print(f"Extracting indices")
-        indices = torch.arange(len(dataset))[mask]
-        print(f"Adding indices and src/tar lengths to map")
+        valid_indices = np.where(mask)[0]
+        valid_src = source_lengths[mask]
+        valid_tgt = target_lengths[mask]
+
         self.lengths_and_indices = [
-            {"id": int(i), "source_length": int(src), "target_length": int(tgt)}
-            for i, src, tgt in zip(indices, source_lengths[mask], target_lengths[mask])
+            {"id": int(idx), "source_length": int(src), "target_length": int(tgt)}
+            for idx, src, tgt in zip(valid_indices, valid_src, valid_tgt)
         ]
 
         print(f"Done computing len_ind")
@@ -61,6 +63,9 @@ class TokenBatchSampler(Sampler[list[int]]):
         self.lengths_and_indices.sort(key=lambda x: x["source_length"])
         print(f"Creating Batches")
         self.batches = self._create_batches()
+
+        del self.lengths_and_indices
+
         print(f"Batches created")
         t1 = time.time()
         print(f"TokenBatchSampler took {t1 - t0} seconds")
@@ -119,7 +124,14 @@ class TokenBatchSampler(Sampler[list[int]]):
         if self.shuffle_batches:
             random.shuffle(self.batches)
         for batch in self.batches:
-            yield batch
+            if self.gradient_accumulation_steps > 1:
+                # Split batch into gradient_accumulation_steps smaller batches
+                batch_size = len(batch)
+                step_size = max(1, batch_size // self.gradient_accumulation_steps)
+                for i in range(0, batch_size, step_size):
+                    yield batch[i:i + step_size]
+            else:
+                yield batch
 
     def __len__(self):
         return len(self.batches)
@@ -174,10 +186,12 @@ def create_dataloader(
     dataset_split_name,
     tokenizer,
     max_tokens_per_batch=25000,
+    gradient_accumulation_steps=1,
     shuffle=True,
     source_lang="en",
     target_lang="de",
     num_workers=0,
+    max_seq_len=128,
 ):
     """
     Create a DataLoader for the translation dataset.
@@ -236,6 +250,11 @@ def create_dataloader(
     )
     print(f"dataset.py: Tokenization Done")
 
+    # Filter out examples longer than max_seq_len
+    tokenized_dataset = tokenized_dataset.filter(
+        lambda x: x["source_length"] <= max_seq_len and x["target_length"] <= max_seq_len
+    )
+
     tokenized_dataset.set_format(
         type="torch",
         columns=[
@@ -247,18 +266,13 @@ def create_dataloader(
         ],
     )
 
-    #to fix tensor issue
-    
-    max_src_len = max(tokenized_dataset["source_length"])
-    max_tgt_len = max(tokenized_dataset["target_length"])
-    max_seq_len = max(max_src_len, max_tgt_len)
-
     token_batch_sampler = TokenBatchSampler(
         tokenized_dataset,
         max_src_tokens_per_batch=max_tokens_per_batch,
         max_tgt_tokens_per_batch=max_tokens_per_batch,
         shuffle_batches=shuffle,
         drop_last=(dataset_split_name == "train"),  # Drop last incomplete batch
+        gradient_accumulation_steps=gradient_accumulation_steps,
     )
 
     collator = TranslationBatchCollator(pad_token_id=pad_token_id)
@@ -276,4 +290,4 @@ def create_dataloader(
     data_loader_path = "dataloader/" + source_lang + "_" + target_lang + ".pth"
     print(f"Saving DataLoader: {data_loader_path}")
     torch.save(data_loader, data_loader_path)
-    return data_loader, max_seq_len
+    return data_loader

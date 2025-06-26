@@ -62,7 +62,7 @@ class AIAYNModel(nn.Module):
             memory_key_padding_mask=memory_key_padding_mask,
         )
 
-        return log_softmax(self.linear(x), dim=-1)
+        return self.linear(x)
 
     def save(self, path: FileLike) -> None:
         torch.save(self.state_dict(), path)
