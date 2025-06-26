@@ -140,8 +140,10 @@ def evaluate_model():
             print(f"✗ Error: {e}")
         print("-" * 30)
 
-
-if __name__ == "__main__":
+def main():
     # Change to project root for relative paths to work
     os.chdir("../../")
     evaluate_model()
+
+if __name__ == "__main__":
+    main()
