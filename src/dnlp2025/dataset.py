@@ -164,8 +164,8 @@ class TranslationBatchCollator:
         )
 
         # --- MASK CREATION ---
-        src_key_padding_mask = encoder_input_ids_padded == self.pad_token_id
-        tgt_key_padding_mask = decoder_input_ids_padded == self.pad_token_id
+        src_key_padding_mask = (encoder_input_ids_padded == self.pad_token_id).float()
+        tgt_key_padding_mask = (decoder_input_ids_padded == self.pad_token_id).float()
         tgt_len = decoder_input_ids_padded.size(1)
         tgt_mask = nn.Transformer.generate_square_subsequent_mask(  # Causal mask
             tgt_len, device=decoder_input_ids_padded.device
