@@ -160,7 +160,7 @@ class TranslationBatchCollator:
             decoder_input_ids_list, batch_first=True, padding_value=self.pad_token_id
         )
         labels_padded = pad_sequence(
-            labels_list, batch_first=True, padding_value=self.ignore_index
+            labels_list, batch_first=True, padding_value=self.ignore_index # Distinguish padding for input/output shape from padding for ignoring loss
         )
 
         # --- MASK CREATION ---
@@ -174,8 +174,6 @@ class TranslationBatchCollator:
             "encoder_input_ids": encoder_input_ids_padded,
             "decoder_input_ids": decoder_input_ids_padded,
             "labels": labels_padded,
-            #TODO we need to change the shape here?
-            #TODO we need to change the shape here?
             "source_key_padding_mask": src_key_padding_mask,  # For encoder
             "target_key_padding_mask": tgt_key_padding_mask,  # For decoder self-attention
             "target_mask": tgt_mask,  # For decoder self-attention (causal)
