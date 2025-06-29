@@ -142,8 +142,9 @@ class TranslationBatchCollator:
     Collator for the translation dataset. Used to pad sequences and create masks.
     """
 
-    def __init__(self, pad_token_id: int):
+    def __init__(self, pad_token_id: int, ignore_index: int = -100):
         self.pad_token_id = pad_token_id
+        self.ignore_index = ignore_index
 
     def __call__(self, batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
         # Assumes each item in 'batch' is a dictionary:
@@ -159,12 +160,12 @@ class TranslationBatchCollator:
             decoder_input_ids_list, batch_first=True, padding_value=self.pad_token_id
         )
         labels_padded = pad_sequence(
-            labels_list, batch_first=True, padding_value=self.pad_token_id
+            labels_list, batch_first=True, padding_value=self.ignore_index # Distinguish padding for input/output shape from padding for ignoring loss
         )
 
         # --- MASK CREATION ---
-        src_key_padding_mask = encoder_input_ids_padded == self.pad_token_id
-        tgt_key_padding_mask = decoder_input_ids_padded == self.pad_token_id
+        src_key_padding_mask = (encoder_input_ids_padded == self.pad_token_id).float()
+        tgt_key_padding_mask = (decoder_input_ids_padded == self.pad_token_id).float()
         tgt_len = decoder_input_ids_padded.size(1)
         tgt_mask = nn.Transformer.generate_square_subsequent_mask(  # Causal mask
             tgt_len, device=decoder_input_ids_padded.device
@@ -173,8 +174,6 @@ class TranslationBatchCollator:
             "encoder_input_ids": encoder_input_ids_padded,
             "decoder_input_ids": decoder_input_ids_padded,
             "labels": labels_padded,
-            #TODO we need to change the shape here?
-            #TODO we need to change the shape here?
             "source_key_padding_mask": src_key_padding_mask,  # For encoder
             "target_key_padding_mask": tgt_key_padding_mask,  # For decoder self-attention
             "target_mask": tgt_mask,  # For decoder self-attention (causal)
@@ -192,6 +191,7 @@ def create_dataloader(
     target_lang="de",
     num_workers=0,
     max_seq_len=128,
+    ignore_index=-100,
 ):
     """
     Create a DataLoader for the translation dataset.
@@ -275,7 +275,7 @@ def create_dataloader(
         gradient_accumulation_steps=gradient_accumulation_steps,
     )
 
-    collator = TranslationBatchCollator(pad_token_id=pad_token_id)
+    collator = TranslationBatchCollator(pad_token_id=pad_token_id, ignore_index=ignore_index)
 
     print(f"Creating DataLoader using Batch TokenBatchSampler and TranslationBatchCollator")
     data_loader = DataLoader(

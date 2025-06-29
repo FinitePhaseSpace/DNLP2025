@@ -14,6 +14,7 @@ torchaudio = "^2.7.0"
 torchvision = "^0.22.0"
 datasets = "^3.6.0"
 tokenizers = "^0.21.1"
+evaluate = "^0.4.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
@@ -22,8 +23,8 @@ black = "^25.1.0"
 [tool.poetry.scripts]
 train-tokenizers = "dnlp2025.train_tokenizers:main"
 train-model = "dnlp2025.train:train"
+evaluate-model = "dnlp2025.evaluate:main"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-

@@ -86,6 +86,7 @@ def train(model_size=512, factor=1.0, warmup=4000):
 
     vocab_size = len(tokenizer.get_vocab())
     pad_token_id = tokenizer.token_to_id("<pad>")
+    ignore_index = -100  # Standard PyTorch ignore index for loss computation
 
     train_loader = None
     max_seq_len = 128
@@ -119,7 +120,8 @@ def train(model_size=512, factor=1.0, warmup=4000):
             source_lang="de",
             target_lang="en",
             num_workers=0,
-            max_seq_len=max_seq_len
+            max_seq_len=max_seq_len,
+            ignore_index=ignore_index
         )
         
         # Save max_seq_len for future use
@@ -164,7 +166,7 @@ def train(model_size=512, factor=1.0, warmup=4000):
     criterion = LabelSmoothingLoss(
         label_smoothing=label_smoothing,
         vocab_size=vocab_size,
-        ignore_index=pad_token_id
+        ignore_index=ignore_index
     )
     # --- Train State ---
     train_state = TrainState()
@@ -185,20 +187,10 @@ def train(model_size=512, factor=1.0, warmup=4000):
 
             encoder_input = batch["encoder_input_ids"]
             decoder_input = batch["decoder_input_ids"]
-            # target_mask = batch["target_mask"]
+            target_mask = batch["target_mask"]
             labels = batch["labels"]
-            # src_mask = batch["source_key_padding_mask"]
-
-            # Forward
-            #TODO add masks (currently they dont work (wrong shape) and i think the values in there are wrong! (debug))
-            # TODO target mask is also wrong! it should be: mask all the padding, mask all subsequent tokens
-            pad_mask_enc = encoder_input == pad_token_id
-            pad_mask_dec = decoder_input == pad_token_id
-
-            # Create subsequent mask [1, T, T] → broadcastable in MultiheadAttention
-            seq_len = decoder_input.size(1)
-            T = decoder_input.size(1)
-            subsequent = subsequent_mask(T).to(device)  # shape [T, T]
+            pad_mask_enc = batch["source_key_padding_mask"]
+            pad_mask_dec = batch["target_key_padding_mask"]
 
 
             
@@ -206,7 +198,7 @@ def train(model_size=512, factor=1.0, warmup=4000):
                 encoder_input,
                 None,  # enc_mask if needed
                 decoder_input,
-                subsequent,
+                target_mask,
                 tgt_key_padding_mask=pad_mask_dec,
                 memory_key_padding_mask=pad_mask_enc,
             )
