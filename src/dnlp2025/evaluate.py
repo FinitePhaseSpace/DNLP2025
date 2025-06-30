@@ -306,7 +306,7 @@ def evaluate_model():
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     tokenizer_path = os.path.join(project_root, "tokenizers", "de_en_tokenizer.json")
     checkpoint_dir = os.path.join(os.path.expanduser("~"), "checkpoints")
-    checkpoint_path = os.path.join(checkpoint_dir, "aiayn-en-de-3.pt")
+    checkpoint_path = os.path.join(checkpoint_dir, "aiayn.pt")
     
     # Load max_seq_len from dataloader info if available
     max_seq_len = 128

@@ -6,9 +6,6 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import LambdaLR
 
-# from src.dnlp2025.model import AIAYNModel
-# from src.dnlp2025.dataset import create_dataloader
-# from src.dnlp2025.download_datasets import download_wmt14_de_en
 from src.dnlp2025.model import AIAYNModel, subsequent_mask
 from src.dnlp2025.dataset import create_dataloader
 from src.dnlp2025.download_datasets import download_wmt14_de_en
@@ -66,13 +63,13 @@ def train(model_size=512, factor=1.0, warmup=4000):
     # --- Config ---
     device = get_device()
     epochs = 10
-    max_tokens_per_batch = 25000
-    gradient_accumulation_steps = 5  # Accumulate over 5 smaller batches
+    max_tokens_per_batch = 1000
+    gradient_accumulation_steps = 1  # Accumulate over 5 smaller batches
     learning_rate = 1.0 #3e-4
     checkpoint_dir = os.path.join(os.path.expanduser("~"), "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
     checkpoint_path = os.path.join(checkpoint_dir, "aiayn.pt")
-    dataset_percentage = 1
+    dataset_percentage = 0.00001
 
 
     # --- Tokenizer ---
@@ -90,6 +87,9 @@ def train(model_size=512, factor=1.0, warmup=4000):
 
     train_loader = None
     max_seq_len = 128
+
+    with open("loss.txt", "w"):
+        pass
 
     if os.path.isfile("dataloader/de_en.pth"):
         print("\n>>>>>     Loading Dataloader from File!!!     <<<<<<\n")
@@ -132,20 +132,6 @@ def train(model_size=512, factor=1.0, warmup=4000):
         t1 = time.time()
         print(f"Total df time: {t1 - t0} seconds")
         print(f"Finished and Tokenizing Dataset: Train")
-
-
-        #print(f"Loading and Tokenizing Dataset: Validation")
-        #val_loader = create_dataloader(
-        #    dataset_split=dataset["validation"],
-        #    dataset_split_name="validation",
-        #    tokenizer=tokenizer,
-        #    max_tokens_per_batch=max_tokens_per_batch,
-        #    shuffle=False,
-        #    source_lang="de",
-        #    target_lang="en",
-        #    num_workers=0,
-        #)
-        #print(f"Finished and Tokenizing Dataset: Validation")
 
     # --- Model ---
     model = AIAYNModel(vocab_size=vocab_size, layers=6, dimension=512, ffn_dim=2048, heads=8, dropout=0.1, max_seq_len=max_seq_len).to(
@@ -235,8 +221,11 @@ def train(model_size=512, factor=1.0, warmup=4000):
                     f"Tokens: {train_state.tokens} | Samples: {train_state.samples}"
                 )
 
-        avg_loss = total_loss / len(train_loader)
+        avg_loss = total_loss / len(train_loader) / gradient_accumulation_steps
         print(f"End of Epoch {epoch + 1} | Avg Loss: {avg_loss:.4f}")
+
+        with open("loss.txt", "a") as f:
+            f.write(f"{avg_loss}\n")
 
         # Save checkpoint
         save_checkpoint(model, optimizer, train_state, checkpoint_path)
